@@ -250,8 +250,7 @@ Each finding MUST follow this exact structure:
 
 ## References
 - [CWE Link](https://cwe.mitre.org/data/definitions/XXX.html)
-- [OWASP Reference](relevant OWASP page)
-- [Additional references]
+- [OWASP Reference](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/)
 ```
 
 ### 4. Remediation Roadmap
