@@ -1,0 +1,8 @@
+{
+    "name": "security-research",
+    "description": "A plugin contains agents and skills for security research purpose",
+    "version": "1.0.0",
+    "author": {
+        "name": "pucavv"
+    }
+}
