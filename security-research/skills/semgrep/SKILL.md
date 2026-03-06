@@ -13,6 +13,7 @@ Run Semgrep against `$ARGUMENTS`.
 Ensure semgrep is installed:
 
 ```bash
+source /home/kali/.venv/bin/activate
 if ! command -v semgrep &> /dev/null; then
     pip3 install semgrep
 fi

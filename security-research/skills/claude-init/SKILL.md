@@ -1,13 +1,8 @@
 ---
 name: claude-init
-description: >-
-  Initialize a security audit workspace for a target codebase. Analyzes the target,
-  creates the audit folder structure, generates a CLAUDE.md configuration, installs
-  Semgrep, and configures Claude Code as a security analyst and 0-day researcher.
-  Use when starting a new security audit, penetration test, or vulnerability assessment.
+description:  Initialize a security audit workspace for a target codebase. Analyzes the target, creates the audit folder structure, generates a CLAUDE.md configuration, installs Semgrep, and configures Claude Code as a security analyst and 0-day researcher. Use when starting a new security audit, penetration test, or vulnerability assessment.
 argument-hint: "<target_source_path> [--ip HOST] [--port PORT] [--creds user:pass]"
 disable-model-invocation: true
-allowed-tools: Bash, Read, Write, Glob, Grep, Edit
 ---
 
 # Security Audit Initialization
@@ -46,6 +41,7 @@ Read the primary manifest file (e.g., `package.json`, `requirements.txt`) to get
 ## Step 3: Install Semgrep
 
 ```bash
+source /home/kali/.venv/bin/activate
 if ! command -v semgrep &> /dev/null; then
     pip3 install semgrep
 fi
@@ -64,7 +60,7 @@ mkdir -p "${AUDIT}"/{recon,architecture,attack_surface,vulnerability_candidates,
 
 ## Step 5: Generate CLAUDE.md
 
-Generate `${AUDIT}/CLAUDE.md` using the [claude-md-template.md](claude-md-template.md) as a base. Fill in:
+Generate `${TARGET}/CLAUDE.md` using the [claude-md-template.md](claude-md-template.md) as a base. Fill in:
 
 - `{target_source}` → actual target path
 - `{target_ip}`, `{target_port}`, `{credentials}` → from arguments or "N/A"
@@ -121,7 +117,9 @@ Priority Focus:
   2. {second vuln class}
   3. {third vuln class}
 
-Next: Run Phase 1 — "start recon" or "run reconnaissance"
+Next: 
+- Run Phase 1 — "start recon" or 
+- Run the full audit — "Run full security audit"
 ```
 
 ## Error Handling
