@@ -1,0 +1,13 @@
+{
+  "name": "pucaplugin",
+  "owner": {
+    "name": "pucagit"
+  },
+  "plugins": [
+    {
+      "name": "security-research",
+      "source": "./plugins/security-research",
+      "description": "Security research agents and skills for dicovering 0days."
+    }
+  ]
+}
