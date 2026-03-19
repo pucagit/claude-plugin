@@ -2,7 +2,6 @@
 name: claude-init
 description:  Initialize a security audit workspace for a target codebase. Provides templates and reference data used by the security-orchestrator during plan mode (CLAUDE.md template, priority focus by system type). Can also be invoked standalone to set up a workspace manually without running the full orchestrator.
 argument-hint: "<target_source_path> [--ip HOST] [--port PORT] [--creds user:pass]"
-disable-model-invocation: true
 ---
 
 # Security Audit Initialization
