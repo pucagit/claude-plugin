@@ -4,11 +4,13 @@ A structured offensive security audit framework that coordinates specialized AI 
 
 ## Setup
 
-### 1. Install the plugin
+### 1. Add marketplace and install the plugin
 Open Claude Code and type in:
 
 ```bash
 /plugin marketplace add https://github.com/pucagit/claude-plugin.git
+/plugin install security-research@pucaplugin
+/reload-plugins
 ```
 
 ### 2. Install Semgrep (required)
