@@ -55,7 +55,7 @@ Create the folder structure. Replace `TARGET` with the actual target path:
 ```bash
 TARGET="$0"
 AUDIT="${TARGET}/security_audit"
-mkdir -p "${AUDIT}"/{recon,architecture,attack_surface,vulnerability_candidates,verified_findings,exploit_pocs,chained_exploits,semgrep-rules,logs,final_report/{findings,appendices}}
+mkdir -p "${AUDIT}"/{recon/{architecture,attack_surface,openapi},exploit/{pocs,chains},verify,report/{bounty_report,appendices},logs/{semgrep-rules,restler-workdir}}
 ```
 
 ## Step 5: Generate CLAUDE.md
@@ -94,7 +94,7 @@ Write to `${AUDIT}/logs/orchestrator.log`:
 [TIMESTAMP] DETECTED: Language={lang}, Framework={framework}, Type={type}
 [TIMESTAMP] WORKSPACE: {audit_path}
 [TIMESTAMP] SEMGREP: {version}
-[TIMESTAMP] STATUS: Ready for Phase 1 (Reconnaissance)
+[TIMESTAMP] STATUS: Ready for Stage 1 (Reconnaissance)
 ```
 
 ## Step 7: Display Summary
@@ -117,8 +117,8 @@ Priority Focus:
   2. {second vuln class}
   3. {third vuln class}
 
-Next: 
-- Run Phase 1 — "start recon" or 
+Next:
+- Run Stage 1 — "start recon" or
 - Run the full audit — "Run full security audit"
 ```
 

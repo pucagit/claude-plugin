@@ -1,6 +1,6 @@
 # Pre-Built Taint Rules for Security Auditing
 
-Ready-to-use taint analysis rules. Copy into `${AUDIT_DIR}/semgrep-rules/` and customize sources/sinks for the target framework.
+Ready-to-use taint analysis rules. Copy into `${AUDIT_DIR}/logs/semgrep-rules/` and customize sources/sinks for the target framework.
 
 ## SQL Injection (Python)
 
@@ -209,7 +209,7 @@ To customize for a specific framework:
 
 4. **Set `languages`** to match the target
 
-5. **Save to** `${AUDIT_DIR}/semgrep-rules/` and validate:
+5. **Save to** `${AUDIT_DIR}/logs/semgrep-rules/` and validate:
    ```bash
-   semgrep --validate --config ${AUDIT_DIR}/semgrep-rules/
+   semgrep --validate --config ${AUDIT_DIR}/logs/semgrep-rules/
    ```

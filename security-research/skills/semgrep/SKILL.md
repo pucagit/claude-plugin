@@ -94,7 +94,7 @@ Key pattern operators:
 Validate before running:
 
 ```bash
-semgrep --validate --config ${AUDIT_DIR}/semgrep-rules/
+semgrep --validate --config ${AUDIT_DIR}/logs/semgrep-rules/
 ```
 
 ### Mode: `taint` — Taint Analysis
@@ -122,7 +122,7 @@ When writing target-specific taint rules:
 1. Get sources from the recon phase entry points
 2. Get sinks from the code review phase sink inventory
 3. Get sanitizers from the code review phase validation analysis
-4. Save rules to `${AUDIT_DIR}/semgrep-rules/`
+4. Save rules to `${AUDIT_DIR}/logs/semgrep-rules/`
 
 ### Mode: `sweep` — Full Security Sweep
 
@@ -143,9 +143,9 @@ semgrep scan \
   ${TARGET_SOURCE}
 
 # Step 2: Custom taint rules (if they exist)
-if [ -d "${AUDIT_DIR}/semgrep-rules" ] && [ "$(ls -A ${AUDIT_DIR}/semgrep-rules/*.yaml 2>/dev/null)" ]; then
+if [ -d "${AUDIT_DIR}/logs/semgrep-rules" ] && [ "$(ls -A ${AUDIT_DIR}/logs/semgrep-rules/*.yaml 2>/dev/null)" ]; then
   semgrep scan \
-    --config ${AUDIT_DIR}/semgrep-rules/ \
+    --config ${AUDIT_DIR}/logs/semgrep-rules/ \
     --json --output ${AUDIT_DIR}/logs/semgrep-custom.json \
     --dataflow-traces \
     --timeout 15 \

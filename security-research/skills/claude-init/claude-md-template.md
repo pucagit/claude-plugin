@@ -66,19 +66,26 @@ The audit is complete ONLY when:
 
 Execute in order, using the specialized agents:
 
+**Stage 1: Recon**
 1. **Reconnaissance** → `recon-agent` → outputs to `recon/`
-2. **Code Review** → `source-code-auditor` → outputs to `architecture/` + `attack_surface/`
-3. **Vulnerability Detection** → `vuln-detect-agent` → outputs to `vulnerability_candidates/`
-4. **Exploit Development** → `exploit-dev-agent` → outputs to `exploit_pocs/` + `chained_exploits/`
-5. **Verification** → `vuln-verification-analyst` → outputs to `verified_findings/`
-6. **Reporting** → `bounty-report-optimizer` → outputs to `final_report/`
+2. **Code Review** → `source-code-auditor` → outputs to `recon/architecture/` + `recon/attack_surface/`
+
+**Stage 2: Exploit**
+3. **Vulnerability Detection** → `vuln-detect-agent` → outputs to `exploit/`
+4. **Exploit Development** → `exploit-dev-agent` → outputs to `exploit/pocs/` + `exploit/chains/`
+
+**Stage 3: Verify**
+5. **Verification** → `vuln-verification-analyst` → outputs to `verify/`
+
+**Stage 4: Report**
+6. **Reporting** → `bounty-report-optimizer` → outputs to `report/`
 
 ## Semgrep Integration
 
 Semgrep is used across phases:
 - Phase 1: `semgrep scan --config p/secrets` for hardcoded credentials
 - Phase 2: `semgrep scan --config p/security-audit --dataflow-traces` for source-sink bootstrap
-- Phase 3: Full registry scan + custom taint rules in `semgrep-rules/`
+- Phase 3: Full registry scan + custom taint rules in `logs/semgrep-rules/`
 
 Use `/semgrep` skill for reference. Results go in `logs/semgrep-*.json`.
 

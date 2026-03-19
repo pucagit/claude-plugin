@@ -1,7 +1,6 @@
 ---
 name: restler
-description: >-
-  Run Microsoft RESTler stateful REST API fuzzing against a target API using an OpenAPI/Swagger specification. Supports compile, test, fuzz-lean, and fuzz modes with security checkers for IDOR, use-after-free, resource hierarchy bypass, payload body mutation, and input validation. Use when performing dynamic API security testing, fuzzing REST endpoints, or detecting runtime vulnerabilities in web APIs.
+description: Run Microsoft RESTler stateful REST API fuzzing against a target API using an OpenAPI/Swagger specification. Supports compile, test, fuzz-lean, and fuzz modes with security checkers for IDOR, use-after-free, resource hierarchy bypass, payload body mutation, and input validation. Use when performing dynamic API security testing, fuzzing REST endpoints, or detecting runtime vulnerabilities in web APIs.
 argument-hint: "<compile|test|fuzz-lean|fuzz|replay> <spec_or_grammar_path> [options]"
 ---
 
@@ -49,7 +48,7 @@ Convert an OpenAPI/Swagger specification into RESTler's fuzzing grammar.
 ```bash
 # $0 = path to OpenAPI spec (JSON or YAML)
 SPEC_PATH="$0"
-WORK_DIR="${AUDIT_DIR:-./}/restler-workdir"
+WORK_DIR="${AUDIT_DIR:-./}/logs/restler-workdir"
 mkdir -p "$WORK_DIR" && cd "$WORK_DIR"
 
 $RESTLER compile --api_spec "$SPEC_PATH"
