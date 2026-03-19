@@ -1,6 +1,6 @@
 ---
 name: claude-init
-description:  Initialize a security audit workspace for a target codebase. Analyzes the target, creates the audit folder structure, generates a CLAUDE.md configuration, installs Semgrep, and configures Claude Code as a security analyst and 0-day researcher. Use when starting a new security audit, penetration test, or vulnerability assessment.
+description:  Initialize a security audit workspace for a target codebase. Provides templates and reference data used by the security-orchestrator during plan mode (CLAUDE.md template, priority focus by system type). Can also be invoked standalone to set up a workspace manually without running the full orchestrator.
 argument-hint: "<target_source_path> [--ip HOST] [--port PORT] [--creds user:pass]"
 disable-model-invocation: true
 ---
@@ -55,7 +55,7 @@ Create the folder structure. Replace `TARGET` with the actual target path:
 ```bash
 TARGET="$0"
 AUDIT="${TARGET}/security_audit"
-mkdir -p "${AUDIT}"/{recon/{architecture,attack_surface,openapi},exploit/{pocs,chains},verify,report/{bounty_report,appendices},logs/{semgrep-rules,restler-workdir}}
+mkdir -p "${AUDIT}"/{recon,findings,logs}
 ```
 
 ## Step 5: Generate CLAUDE.md
@@ -118,8 +118,8 @@ Priority Focus:
   3. {third vuln class}
 
 Next:
-- Run Stage 1 — "start recon" or
-- Run the full audit — "Run full security audit"
+- Plan the audit — "Plan a security audit" (REQUIRED before execution)
+- The orchestrator will ask for scope, rules, report format, and other details before starting
 ```
 
 ## Error Handling

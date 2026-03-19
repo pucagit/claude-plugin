@@ -1,8 +1,34 @@
 {
     "name": "security-research",
     "description": "A plugin contains agents and skills for security research purpose",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "author": {
         "name": "pucavv"
+    },
+    "lspServers": {
+        "go": {
+            "command": "gopls",
+            "args": ["serve"],
+            "extensionToLanguage": {
+                ".go": "go"
+            }
+        },
+        "python": {
+            "command": "pyright-langserver",
+            "args": ["--stdio"],
+            "extensionToLanguage": {
+                ".py": "python"
+            }
+        },
+        "typescript": {
+            "command": "typescript-language-server",
+            "args": ["--stdio"],
+            "extensionToLanguage": {
+                ".ts": "typescript",
+                ".tsx": "typescriptreact",
+                ".js": "javascript",
+                ".jsx": "javascriptreact"
+            }
+        }
     }
 }

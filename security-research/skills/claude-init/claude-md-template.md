@@ -66,28 +66,34 @@ The audit is complete ONLY when:
 
 Execute in order, using the specialized agents:
 
-**Stage 1: Recon**
-1. **Reconnaissance** → `recon-agent` → outputs to `recon/`
-2. **Code Review** → `source-code-auditor` → outputs to `recon/architecture/` + `recon/attack_surface/`
+**Note**: The `security-orchestrator` handles planning, workspace setup, and initialization automatically before these phases begin.
 
-**Stage 2: Exploit**
-3. **Vulnerability Detection** → `vuln-detect-agent` → outputs to `exploit/`
-4. **Exploit Development** → `exploit-dev-agent` → outputs to `exploit/pocs/` + `exploit/chains/`
+**Phase 1: Recon & Analysis**
+1. **Reconnaissance + Code Review** → `recon-agent` → outputs to `recon/`
+   - `recon/intelligence.md` — System overview, tech stack, config review
+   - `recon/architecture.md` — Endpoints, auth flows, framework protections, data flows
+   - `recon/attack-surface.md` — Source-sink matrix, threat model, attack surface map
+   - `recon/swagger.json` — OpenAPI spec (REST APIs only)
 
-**Stage 3: Verify**
-5. **Verification** → `vuln-verification-analyst` → outputs to `verify/`
+**Phase 2: Vulnerability Hunting**
+2. **Detection + Exploitation** → `vuln-hunter` → outputs to `findings/`
+   - `findings/VULN-NNN/VULN-NNN.md` — Finding writeup
+   - `findings/VULN-NNN/poc/` — PoC scripts, HTTP evidence, payloads
 
-**Stage 4: Report**
-6. **Reporting** → `bounty-report-optimizer` → outputs to `report/`
+**Phase 3: Verification**
+3. **Verification** → `verifier` → updates `findings/VULN-NNN/VULN-NNN.md`, writes `false-positives.md`
+
+**Phase 4: Reporting**
+4. **Reporting** → `reporter` → outputs `report.md` (follows `REPORT.md` template if provided)
 
 ## Semgrep Integration
 
 Semgrep is used across phases:
 - Phase 1: `semgrep scan --config p/secrets` for hardcoded credentials
-- Phase 2: `semgrep scan --config p/security-audit --dataflow-traces` for source-sink bootstrap
-- Phase 3: Full registry scan + custom taint rules in `logs/semgrep-rules/`
+- Phase 1: `semgrep scan --config p/security-audit --dataflow-traces` for source-sink bootstrap
+- Phase 2: Full registry scan + custom taint rules
 
-Use `/semgrep` skill for reference. Results go in `logs/semgrep-*.json`.
+Use `/semgrep` skill for reference. Results go in `logs/semgrep-results.json`.
 
 ## Priority Focus
 
