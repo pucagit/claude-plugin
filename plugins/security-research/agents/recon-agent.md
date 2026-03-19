@@ -68,11 +68,13 @@ Scan `{AUDIT_DIR}/recon/` for any user-provided documents (PDFs, markdown, API s
 
 **Section 3: Configuration Security**
 - Check all config files for: hardcoded credentials (REDACT values), debug mode, permissive CORS, missing security headers, insecure defaults, verbose errors
-- Run Semgrep secrets scan:
-```bash
-semgrep scan --config p/secrets --json --output ${AUDIT_DIR}/logs/semgrep-results.json \
-  --severity WARNING --severity ERROR ${TARGET_SOURCE}
-```
+- **Invoke the Skill tool** to run a structured Semgrep secrets scan:
+  - Skill tool: **skill="semgrep"**, **args="scan secrets ${TARGET_SOURCE} --output ${AUDIT_DIR}/logs/semgrep-results.json"**
+  - If the skill is unavailable, fall back to running Semgrep directly:
+    ```bash
+    semgrep scan --config p/secrets --json --output ${AUDIT_DIR}/logs/semgrep-results.json \
+      --severity WARNING --severity ERROR ${TARGET_SOURCE}
+    ```
 - Include findings tagged as `[SEMGREP:secrets]`
 
 **WRITE** `{AUDIT_DIR}/recon/intelligence.md` NOW.
@@ -81,10 +83,10 @@ semgrep scan --config p/secrets --json --output ${AUDIT_DIR}/logs/semgrep-result
 
 **Section 1: Endpoint Inventory**
 
-Use the `code-review` skill for framework-specific patterns:
-```
-Skill "code-review routes"
-```
+**You MUST invoke the Skill tool** to load framework-specific route patterns:
+- Skill tool: **skill="code-review"**, **args="routes"**
+
+This loads route annotation patterns for Flask, FastAPI, Django, Express, Spring Boot, Rails, Laravel, etc. After the skill loads, use its patterns to grep for and identify all endpoints.
 
 For each endpoint: URL pattern, HTTP method, handler `file:line`, auth required (Y/N), authz check (Y/N), input parameters.
 
@@ -120,13 +122,11 @@ Check: SQL/ORM, CSRF, path traversal normalization, XSS/template escaping, auth 
 
 **Section 1: Source-Sink Matrix**
 
-Use the `code-review` skill:
-```
-Skill "code-review sources"
-Skill "code-review sinks"
-```
+**You MUST invoke the Skill tool** to load source and sink reference data:
+1. Skill tool: **skill="code-review"**, **args="sources"** — loads input source taxonomy (HTTP params, headers, cookies, WebSocket, async)
+2. Skill tool: **skill="code-review"**, **args="sinks"** — loads dangerous sink catalog by language with grep patterns
 
-Run bootstrap grep commands against `TARGET_SOURCE`. For each sink hit, trace backwards to input source.
+After each skill loads, run the bootstrap grep commands it provides against `TARGET_SOURCE`. For each sink hit, trace backwards to input source.
 
 | Priority | Source | Sink | Chain | Viability |
 |---|---|---|---|---|

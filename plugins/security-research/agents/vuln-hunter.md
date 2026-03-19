@@ -55,7 +55,12 @@ This plugin has LSP servers configured for 12 languages (Python, TypeScript/JS, 
 
 ### Step 0: Automated Scanning
 
-**Semgrep:**
+**You MUST run Semgrep** against the target. Use the Skill tool for structured scanning, with a bash fallback:
+
+**Option A (preferred)** — Invoke the Skill tool:
+- Skill tool: **skill="semgrep"**, **args="sweep ${TARGET_SOURCE} --output ${AUDIT_DIR}/logs/semgrep-results.json"**
+
+**Option B (fallback)** — Run directly if the skill is unavailable:
 ```bash
 semgrep scan --config p/security-audit --config p/owasp-top-ten \
   --json --output ${AUDIT_DIR}/logs/semgrep-results.json \
@@ -63,22 +68,23 @@ semgrep scan --config p/security-audit --config p/owasp-top-ten \
   --exclude "vendor" --exclude "node_modules" --exclude "*.min.js" \
   ${TARGET_SOURCE}
 ```
+
 Process results: extract check_id, path:line, severity, cwe, dataflow_trace. Tag as `[SEMGREP:rule-id]`.
 
 ### Step 1: Detection Pass
 
-Invoke detection skills based on the tech stack from `recon/intelligence.md`:
+**You MUST invoke ALL 4 detection skills using the Skill tool.** Each skill loads vulnerability patterns, grep commands, and confirmation rules for its category. Invoke them one by one:
 
-```
-Skill "detect-injection"   ← SQLi, CMDi, path traversal, SSTI, SSRF, XSS, deserialization, file handling, memory (C/C++ only)
-Skill "detect-auth"        ← IDOR/BOLA, BFLA, privilege escalation, JWT, session, OAuth, mass assignment, multi-tenant
-Skill "detect-logic"       ← Race conditions, workflow bypass, price/quantity manipulation, cache poisoning, rate limiting, API issues
-Skill "detect-config"      ← Debug mode, CORS, headers, exposed endpoints, weak crypto, hardcoded secrets
-```
+1. **Invoke Skill tool**: skill=**"detect-injection"** — loads patterns for SQLi, CMDi, path traversal, SSTI, SSRF, XSS, deserialization, file handling, memory corruption (C/C++ only)
+2. **Invoke Skill tool**: skill=**"detect-auth"** — loads patterns for IDOR/BOLA, BFLA, privilege escalation, JWT, session, OAuth, mass assignment, multi-tenant isolation
+3. **Invoke Skill tool**: skill=**"detect-logic"** — loads patterns for race conditions, workflow bypass, price/quantity manipulation, cache poisoning, rate limiting, API exposure
+4. **Invoke Skill tool**: skill=**"detect-config"** — loads patterns for debug mode, CORS, headers, exposed endpoints, weak crypto, hardcoded secrets, container misconfig
+
+**For each skill**: after it loads, apply its grep patterns against `TARGET_SOURCE`, follow its detection procedures, and use its confirmation rules to classify findings.
 
 Skip memory-corruption sections within detect-injection if no C/C++ or unsafe Rust code is present.
 
-For each finding discovered: trace source→sink chain, check framework protections, then write immediately.
+For each finding discovered: trace source→sink chain, check framework protections (from `recon/architecture.md` Section 3), then write immediately using Step 2 format.
 
 ### Step 2: Write Each Finding
 
