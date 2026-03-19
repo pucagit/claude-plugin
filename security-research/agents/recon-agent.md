@@ -36,7 +36,7 @@ You write exactly 3 files (+ optional swagger.json):
 
 ## LSP Integration
 
-This plugin has LSP servers configured for **Python** (Pyright), **TypeScript** (typescript-language-server), and **Go** (gopls). Use them to accelerate analysis:
+This plugin has LSP servers configured for 12 languages (Python, TypeScript/JS, Go, C/C++, Rust, Java, Ruby, PHP, Kotlin, C#, Lua, Swift). They activate automatically when the binary is in PATH. Use them to accelerate analysis:
 
 - **`mcp__ide__getDiagnostics`**: Call with a file URI (e.g., `file:///path/to/file.py`) to get type errors, unreachable code, undefined references, and import issues from the language server. Call without arguments to get diagnostics for ALL files in the workspace.
 - **When to use**:

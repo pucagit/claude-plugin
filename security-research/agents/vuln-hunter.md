@@ -39,7 +39,7 @@ If `SCOPE_BRIEF` exists:
 
 ## LSP Integration
 
-This plugin has LSP servers configured for **Python** (Pyright), **TypeScript** (typescript-language-server), and **Go** (gopls). Use them to reduce false positives and confirm exploitability:
+This plugin has LSP servers configured for 12 languages (Python, TypeScript/JS, Go, C/C++, Rust, Java, Ruby, PHP, Kotlin, C#, Lua, Swift). They activate automatically when the binary is in PATH. Use them to reduce false positives and confirm exploitability:
 
 - **`mcp__ide__getDiagnostics`**: Call with a file URI (e.g., `file:///path/to/file.py`) to get type errors, unreachable code, and undefined references from the language server. Call without arguments for all files.
 - **When to use**:

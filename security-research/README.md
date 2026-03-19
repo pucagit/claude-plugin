@@ -2,20 +2,59 @@
 
 A structured offensive security audit framework that coordinates specialized AI agents through a complete vulnerability research lifecycle — from planning through verified findings with production-grade reports.
 
-## Prerequisites
+## Setup
+
+### 1. Install the plugin
 
 ```bash
-# Python LSP (type analysis for Python targets)
-npm install -g pyright
+git clone <repo-url> ~/.claude/plugins/myplugin/security-research
+```
 
-# TypeScript LSP (type analysis for JS/TS targets)
-npm install -g typescript-language-server typescript
+Or symlink it into your Claude Code plugins directory:
 
-# Go LSP (type analysis for Go targets)
-go install golang.org/x/tools/gopls@latest
+```bash
+ln -s /path/to/security-research ~/.claude/plugins/security-research
+```
 
-# Semgrep (SAST scanning)
+### 2. Install Semgrep (required)
+
+Semgrep is the SAST engine used across all phases. The orchestrator will attempt to install it automatically, but pre-installing is recommended:
+
+```bash
 pip install semgrep
+```
+
+### 3. Install LSP servers (install only what you need)
+
+The plugin bundles configs for 12 language servers. LSP servers provide type analysis that agents use to reduce false positives, confirm code reachability, and validate PoC scripts. **You only need to install the ones matching your target's language.**
+
+| Language | Install Command | Binary |
+|----------|----------------|--------|
+| **Python** | `npm install -g pyright` or `pip install pyright` | `pyright-langserver` |
+| **TypeScript / JavaScript** | `npm install -g typescript-language-server typescript` | `typescript-language-server` |
+| **Go** | `go install golang.org/x/tools/gopls@latest` | `gopls` |
+| **C / C++** | `sudo apt install clangd` | `clangd` |
+| **Rust** | `rustup component add rust-analyzer` | `rust-analyzer` |
+| **Java** | `brew install jdtls` or [manual install](https://download.eclipse.org/jdtls/snapshots/) | `jdtls` (requires JDK 17+) |
+| **Ruby** | `gem install ruby-lsp` | `ruby-lsp` (requires Ruby 3.0+) |
+| **PHP** | `npm install -g intelephense` | `intelephense` |
+| **Kotlin** | `brew install JetBrains/utils/kotlin-lsp` | `kotlin-lsp` |
+| **C#** | `dotnet tool install --global csharp-ls` | `csharp-ls` (requires .NET SDK 6.0+) |
+| **Lua** | `sudo apt install lua-language-server` | `lua-language-server` |
+| **Swift** | Included with Xcode / `brew install swift` | `sourcekit-lsp` |
+
+LSP servers activate automatically when the plugin detects files matching their configured extensions. Missing binaries are silently skipped — agents fall back to grep-based analysis.
+
+### Verify your setup
+
+```bash
+# Check which LSP binaries are available
+for cmd in pyright-langserver typescript-language-server gopls clangd rust-analyzer ruby-lsp jdtls intelephense lua-language-server sourcekit-lsp csharp-ls kotlin-lsp; do
+  command -v $cmd &>/dev/null && echo "$cmd: OK" || echo "$cmd: not installed"
+done
+
+# Check Semgrep
+semgrep --version
 ```
 
 ---
@@ -175,7 +214,14 @@ If no `REPORT.md` exists, the reporter uses its built-in template with executive
 
 ### LSP Integration
 
-Language servers for **Python** (Pyright), **TypeScript**, and **Go** (gopls) provide type analysis. Agents use `mcp__ide__getDiagnostics` to confirm code reachability, check type constraints, and validate PoC scripts.
+The plugin bundles configs for 12 language servers (Python, TypeScript/JS, Go, C/C++, Rust, Java, Ruby, PHP, Kotlin, C#, Lua, Swift). They activate automatically based on file extensions when the binary is in PATH. Agents use `mcp__ide__getDiagnostics` to:
+
+- Confirm whether vulnerable code paths are reachable (not dead code)
+- Check type constraints that prevent exploitation (e.g., `int` params can't be injected)
+- Validate PoC scripts for correctness before marking them ready
+- Resolve function calls and imports that grep-based analysis misses
+
+Missing LSP binaries are silently skipped — agents fall back to grep-based analysis with no errors.
 
 ---
 
@@ -210,7 +256,7 @@ Phase 1: RECON                       Phase 2: HUNT
 └─────────────────────────┘           └────────────────────────┘
                                                │
                                                ▼
-Phase 4: REPORT                      Phase 3: VERIFY 
+Phase 4: REPORT                      Phase 3: VERIFY
 ┌─────────────────────────┐           ┌────────────────────────┐
 │  reporter               │           │  verifier              │
 │                         │           │                        │
@@ -262,27 +308,9 @@ The orchestrator detects existing `RULES.md` during plan mode and asks whether t
 
 ---
 
-## Finding Format
-
-Each finding lives in its own directory `findings/VULN-NNN/`:
-
-```
-findings/VULN-001/
-├── VULN-001.md           # Finding writeup
-└── poc/
-    ├── exploit.py        # Runnable PoC: python3 exploit.py http://target
-    ├── request.txt       # Raw HTTP request
-    ├── response.txt      # Captured response proving exploitation
-    └── payload.zip       # (example) Crafted malicious payload
-```
-
-The writeup `VULN-001.md` contains: metadata table, description, vulnerable code with `file:line`, source-to-sink chain, framework protection analysis, PoC file table linking to `poc/`, impact analysis, chain potential, verification notes, and mitigation.
-
----
-
 ## Tips
 
-- **One command to start** — just tell Claude to audit a path. The orchestrator handles everything: workspace setup, tech fingerprinting, Semgrep installation, CLAUDE.md generation, and plan presentation.
+- **One command to start** — just tell Claude to an audit. The orchestrator handles everything: workspace setup, tech fingerprinting, Semgrep installation, CLAUDE.md generation, and plan presentation.
 
 - **Provide a threat model** — if you have existing security knowledge about the target, sharing it during plan mode saves significant recon time.
 
