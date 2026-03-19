@@ -186,43 +186,43 @@ PLAN (mandatory — includes workspace initialization)
 ┌──────────────────────────────────────────────────────────────┐
 │  security-orchestrator (plan mode)                           │
 │                                                              │
-│  Ask:   source path, IP:PORT, creds, rules, format, model   │
+│  Ask:   source path, IP:PORT, creds, rules, format, model    │
 │  Init:  validate target, fingerprint tech, install semgrep   │
-│  Write: CLAUDE.md, RULES.md, REPORT.md, threat-model-input  │
+│  Write: CLAUDE.md, RULES.md, REPORT.md, threat-model-input   │
 │  Show:  audit plan with target classification                │
 │  Gate:  user approval required                               │
 └──────────────────────────┬───────────────────────────────────┘
                            ▼
 Phase 1: RECON                       Phase 2: HUNT
-┌────────────────────────┐           ┌────────────────────────┐
-│  recon-agent            │           │  vuln-hunter            │
-│                         │           │                         │
-│  Read threat model input│           │  Read recon artifacts   │
-│  Tech fingerprint       ├──────────►│  Run Semgrep            │
-│  Map endpoints          │           │  4 detect-* skills      │
-│  Trace auth flows       │           │  Write PoC per finding  │
-│  Catalog protections    │           │  Analyze chains         │
-│  Build attack surface   │           │                         │
-│                         │           │  ► VULN-NNN/ dirs       │
-│  ► intelligence.md      │           │    with poc/ artifacts  │
-│  ► architecture.md      │           │                         │
-│  ► attack-surface.md    │           │                         │
-└────────────────────────┘           └────────────────────────┘
+┌─────────────────────────┐           ┌────────────────────────┐
+│  recon-agent            │           │  vuln-hunter           │
+│                         │           │                        │
+│  Read threat model input│           │  Read recon artifacts  │
+│  Tech fingerprint       ├──────────►│  Run Semgrep           │
+│  Map endpoints          │           │  4 detect-* skills     │
+│  Trace auth flows       │           │  Write PoC per finding │
+│  Catalog protections    │           │  Analyze chains        │
+│  Build attack surface   │           │                        │
+│                         │           │  ► VULN-NNN/ dirs      │
+│  ► intelligence.md      │           │    with poc/ artifacts │
+│  ► architecture.md      │           │                        │
+│  ► attack-surface.md    │           │                        │
+└─────────────────────────┘           └────────────────────────┘
                                                │
                                                ▼
-Phase 3: VERIFY                      Phase 4: REPORT
-┌────────────────────────┐           ┌────────────────────────┐
-│  verifier               │           │  reporter               │
-│                         │           │                         │
-│  Re-read source code    │           │  Read REPORT.md template│
-│  Trace chains indep.    ├──────────►│  Read confirmed findings│
-│  Check protections      │           │  Executive summary      │
-│  Validate PoCs (LSP)    │           │  Technical details      │
-│  Calibrate severity     │           │  Remediation roadmap    │
-│                         │           │                         │
-│  ► Update findings      │           │  ► report.md            │
-│  ► false-positives.md   │           │                         │
-└────────────────────────┘           └────────────────────────┘
+Phase 4: REPORT                      Phase 3: VERIFY 
+┌─────────────────────────┐           ┌────────────────────────┐
+│  reporter               │           │  verifier              │
+│                         │           │                        │
+│  Read REPORT.md template│           │  Re-read source code   │
+│  Read confirmed findings│ ◄─────────│  Trace chains indep.   │
+│  Executive summary      │           │  Check protections     │
+│  Technical details      │           │  Validate PoCs (LSP)   │
+│  Remediation roadmap    │           │  Calibrate severity    │
+│                         │           │                        │
+│  ► report.md            │           │  ► Update findings     │
+│                         │           │  ► false-positives.md  │
+└─────────────────────────┘           └────────────────────────┘
 ```
 
 ---
