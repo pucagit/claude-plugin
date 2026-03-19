@@ -2,7 +2,6 @@
 name: code-review
 description: Reference guide for Phase 2 source code security review. Provides framework-specific route and auth annotation patterns, input source taxonomy, and sink catalog with grep commands for building source-to-sink chains. Use during endpoint mapping, auth gap analysis, and attack surface construction.
 argument-hint: "<routes|sources|sinks>"
-
 ---
 
 # Code Review Reference Guide
