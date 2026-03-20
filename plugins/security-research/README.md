@@ -61,7 +61,7 @@ semgrep --version
 ### Step 1: Plan the audit
 
 ```
-Run a security audit on /path/to/target-source
+Run a security audit on this project using the security-research plugin
 ```
 
 The **Security Orchestrator** takes over. It starts in **plan mode** and will:
