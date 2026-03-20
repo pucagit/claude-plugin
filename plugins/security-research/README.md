@@ -79,12 +79,12 @@ The **Security Orchestrator** takes over. It starts in **plan mode** and will:
    | **Report format** | Paste template → orchestrator writes `REPORT.md` |
    | **Existing threat model** | Paste or provide path → saved for the recon agent |
 
-3. **Automatically initialize the workspace:**
+3. **Automatically initialize the workspace** (in the parent directory of your source code):
    - Validate the target path and estimate codebase size
    - Fingerprint the tech stack (languages, frameworks, dependencies)
    - Classify the system type (Web API, Auth Service, CMS, etc.)
    - Install Semgrep if needed
-   - Create `security_audit/` directory structure
+   - Create `security_audit/` directory structure (sibling of source code, not inside it)
    - Generate `CLAUDE.md` configuration
    - Write `RULES.md`, `REPORT.md`, `threat-model-input.md` from your inputs
 
@@ -120,7 +120,8 @@ Generate a report from /path/to/target-source/security_audit
 ### Step 3: Review results
 
 ```
-project-root/
+audit-directory/                   # Working directory (parent of source code)
+├── source-code/                   # Target source code (read-only during audit)
 ├── CLAUDE.md                      # Generated during plan mode
 ├── RULES.md                       # Bug bounty rules (if provided)
 ├── REPORT.md                      # Custom report template (if provided)

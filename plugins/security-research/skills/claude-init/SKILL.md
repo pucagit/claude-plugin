@@ -1,7 +1,7 @@
 ---
 name: claude-init
 description:  Initialize a security audit workspace for a target codebase. Provides templates and reference data used by the security-orchestrator during plan mode (CLAUDE.md template, priority focus by system type). Can also be invoked standalone to set up a workspace manually without running the full orchestrator.
-argument-hint: "<target_source_path> [--ip HOST] [--port PORT] [--creds user:pass]"
+argument-hint: "<target_source_path> [--project-dir DIR] [--ip HOST] [--port PORT] [--creds user:pass]"
 ---
 
 # Security Audit Initialization
@@ -9,9 +9,16 @@ argument-hint: "<target_source_path> [--ip HOST] [--port PORT] [--creds user:pas
 Initialize a full security audit workspace for the target at `$ARGUMENTS`.
 
 Parse the arguments: the first positional argument is the target source path. Optional flags:
+- `--project-dir`: working directory where audit outputs go (defaults to parent of source path)
 - `--ip` or second positional: live target IP/hostname
 - `--port` or third positional: live target port
 - `--creds`: authentication credentials (user:pass format)
+
+Derive the project directory:
+- If `--project-dir` is provided, use that as `PROJECT_DIR`
+- Otherwise, `PROJECT_DIR` = parent directory of the target source path
+
+**IMPORTANT**: All audit outputs (CLAUDE.md, security_audit/) go in `PROJECT_DIR`, NOT inside the source code directory.
 
 ## Step 1: Validate Target
 
@@ -49,19 +56,23 @@ semgrep --version
 
 ## Step 4: Create Audit Workspace
 
-Create the folder structure. Replace `TARGET` with the actual target path:
+Create the folder structure. `PROJECT_DIR` is the parent of the source code path (or the `--project-dir` value if provided):
 
 ```bash
 TARGET="$0"
-AUDIT="${TARGET}/security_audit"
+PROJECT_DIR="${PROJECT_DIR:-$(dirname "${TARGET}")}"
+AUDIT="${PROJECT_DIR}/security_audit"
 mkdir -p "${AUDIT}"/{recon,findings,logs}
 ```
 
+**The workspace is created in PROJECT_DIR (parent of source), NOT inside the source code directory.**
+
 ## Step 5: Generate CLAUDE.md
 
-Generate `${TARGET}/CLAUDE.md` using the [claude-md-template.md](claude-md-template.md) as a base. Fill in:
+Generate `${PROJECT_DIR}/CLAUDE.md` using the [claude-md-template.md](claude-md-template.md) as a base. Fill in:
 
-- `{target_source}` → actual target path
+- `{target_source}` → actual source code path
+- `{audit_dir}` → PROJECT_DIR/security_audit
 - `{target_ip}`, `{target_port}`, `{credentials}` → from arguments or "N/A"
 - `{detected_language}` → from fingerprinting
 - `{detected_framework}` → from fingerprinting
@@ -103,7 +114,8 @@ Print a clear summary:
 ```
 SECURITY AUDIT INITIALIZED
 ═══════════════════════════
-Target:     {path}
+Source:     {source_path}
+Project:    {project_dir}
 Language:   {lang}
 Framework:  {framework}
 Type:       {classification}
