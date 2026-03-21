@@ -44,7 +44,24 @@ Identify by examining actual files:
 
 Read the primary manifest file (e.g., `package.json`, `requirements.txt`) to get exact versions.
 
-## Step 3: Install Semgrep
+## Step 3: Interactive Intake
+
+Display what was detected:
+```
+Detected: {detected_language} / {detected_framework} / {classified_type}
+```
+
+Then ask the user two questions in sequence:
+
+1. **Live target**: `"Is there a live target instance? If yes, provide IP:PORT (e.g. 192.168.1.50:8080), or press Enter to skip."`
+2. **Credentials**: `"Credentials for the live target? (format: user:pass), or press Enter to skip."`
+
+Store the responses as `TARGET_IP`, `TARGET_PORT`, and `CREDENTIALS`:
+- If the user provides IP:PORT, parse and store `TARGET_IP` and `TARGET_PORT` (override any `--ip`/`--port` CLI values)
+- If the user presses Enter (skips), fall back to CLI-provided values; if none, use "N/A"
+- If the user provides credentials, store as `CREDENTIALS` (override `--creds` CLI value); if skipped, fall back to CLI or "N/A"
+
+## Step 4: Install Semgrep
 
 ```bash
 source /home/kali/.venv/bin/activate
@@ -54,7 +71,7 @@ fi
 semgrep --version
 ```
 
-## Step 4: Create Audit Workspace
+## Step 5: Create Audit Workspace
 
 Create the folder structure. `PROJECT_DIR` is the parent of the source code path (or the `--project-dir` value if provided):
 
@@ -67,16 +84,19 @@ mkdir -p "${AUDIT}"/{recon,findings,logs}
 
 **The workspace is created in PROJECT_DIR (parent of source), NOT inside the source code directory.**
 
-## Step 5: Generate CLAUDE.md
+## Step 6: Generate CLAUDE.md
 
 Generate `${PROJECT_DIR}/CLAUDE.md` using the [claude-md-template.md](claude-md-template.md) as a base. Fill in:
 
 - `{target_source}` → actual source code path
-- `{audit_dir}` → PROJECT_DIR/security_audit
-- `{target_ip}`, `{target_port}`, `{credentials}` → from arguments or "N/A"
+- `{source_name}` → basename of the source path
+- `{project_dir}` → PROJECT_DIR
+- `{target_ip}`, `{target_port}`, `{credentials}` → from interactive intake or "N/A"
 - `{detected_language}` → from fingerprinting
 - `{detected_framework}` → from fingerprinting
 - `{classified_type}` → system classification (see below)
+- `{system_description}` → brief description of what the system does (derived from codebase exploration)
+- `{key_features}` → 3–5 key features found during fingerprinting
 - `{priority_section}` → from [priority-focus.md](priority-focus.md) based on system type
 
 ### System Classification
@@ -93,7 +113,7 @@ Classify based on what you found:
 | C/C++/Rust, pointer arithmetic, buffer ops | Native Application |
 | Multiple services, docker-compose, gRPC | Microservice |
 
-## Step 6: Write Initialization Log
+## Step 7: Write Initialization Log
 
 Write to `${AUDIT}/logs/orchestrator.log`:
 
@@ -107,7 +127,7 @@ Write to `${AUDIT}/logs/orchestrator.log`:
 [TIMESTAMP] STATUS: Ready for Stage 1 (Reconnaissance)
 ```
 
-## Step 7: Display Summary
+## Step 8: Display Summary
 
 Print a clear summary:
 
