@@ -155,6 +155,28 @@ grep -rn "role.*update\|update.*role\|assign.*role\|grant.*permission\|revoke.*p
 | `is_admin = serializer.validated_data.get('is_admin')` without admin check | CRITICAL |
 | Role assignment without privilege level check | HIGH |
 
+## Beyond Pattern Matching — Semantic Analysis
+
+The grep patterns above catch known vulnerability shapes. After completing the pattern scan,
+perform semantic analysis on the code you've read:
+
+1. **For each handler/endpoint**: Read the full function. Ask: "What security assumption
+   does this code make? Can that assumption be violated?"
+
+2. **For custom abstractions**: If the codebase has custom auth decorators, permission
+   middleware, or access control wrappers — read their implementations. Are they correct?
+   Do they handle edge cases (null, empty, unicode, concurrent calls)?
+
+3. **Cross-module flows**: If a variable passes through 3+ functions before reaching a sink,
+   follow it through every hop. One missed encoding step in the middle = vulnerability.
+
+4. **Auth-specific deep analysis**:
+   - **Map every privilege boundary**: Draw the complete auth topology — which endpoints require which roles. Look for the *absence* of checks, not just broken checks. An endpoint that was simply forgotten is more common than a bypassed one.
+   - **Verify enforcement is at the boundary, not just UI**: If admin buttons are hidden in the frontend but the backend endpoint has no auth check, that's a vulnerability. Check every admin-like endpoint for server-side enforcement.
+   - **Alternative routes that bypass auth**: Can the same resource be accessed via a different URL, API version, or content type that doesn't have the auth middleware applied? Check for path aliases, API versioning patterns, and content negotiation.
+   - **Object-level auth in bulk operations**: Single-object endpoints may check ownership, but do list/export/batch endpoints filter by the requesting user? Check pagination endpoints, CSV exports, and bulk-action handlers.
+   - **Token/session lifecycle gaps**: Is the token validated on every request or just at login? After password change, are existing sessions invalidated? After role downgrade, is the cached permission set refreshed?
+
 ## Reference Files
 
 - [Auth/access control vulnerable patterns by framework](references/patterns.md)

@@ -209,6 +209,28 @@ grep -rn "webhook\|X-Hub-Signature\|verify.*signature\|hmac.*verify\|webhook.*se
 | Webhook signature missing entirely | HIGH |
 | `hmac.compare_digest(sig1, sig2)` | FALSE POSITIVE (constant-time) |
 
+## Beyond Pattern Matching — Semantic Analysis
+
+The grep patterns above catch known vulnerability shapes. After completing the pattern scan,
+perform semantic analysis on the code you've read:
+
+1. **For each handler/endpoint**: Read the full function. Ask: "What security assumption
+   does this code make? Can that assumption be violated?"
+
+2. **For custom abstractions**: If the codebase has custom transaction wrappers, state machines,
+   or workflow engines — read their implementations. Are they correct?
+   Do they handle edge cases (null, empty, unicode, concurrent calls)?
+
+3. **Cross-module flows**: If a variable passes through 3+ functions before reaching a sink,
+   follow it through every hop. One missed encoding step in the middle = vulnerability.
+
+4. **Logic-specific deep analysis**:
+   - **Understand the intended business workflow**: Map the complete happy path: step A → B → C → D. Now ask: can any step be skipped? Can step C be called directly without B? Can B be called twice? Can D be called before C completes? Check for state validation at each transition.
+   - **Concurrent user scenarios**: What happens if two users (or the same user in two tabs) perform the same action simultaneously? Especially: purchases, transfers, coupon redemptions, vote/like operations, inventory claims. Look for read-modify-write sequences without database-level atomicity.
+   - **Negative and zero values**: If the system handles money, quantities, or credits — what happens with negative amounts? Zero? Fractional values? Values that overflow the column type? Check both the validation AND the arithmetic.
+   - **Time-based assumptions**: Does the code assume operations complete instantly? Are there gaps between "check permission" and "perform action" where state could change? Look for sequences where a condition is checked, then a separate database call acts on it.
+   - **Caching and consistency**: If the code caches auth decisions, permissions, or feature flags — what's the TTL? Can a revoked permission still be used during the cache window? Can a user manipulate cache keys?
+
 ## Reference Files
 
 - [Business logic & concurrency patterns by domain](references/patterns.md)

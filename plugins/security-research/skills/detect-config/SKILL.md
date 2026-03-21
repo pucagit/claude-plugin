@@ -186,6 +186,28 @@ grep -rn "cluster-admin\|verbs.*\*\|resources.*\*\|serviceAccountName.*default\|
 | Hardcoded `SECRET_KEY = "mysecretkey"` | HIGH |
 | `privileged: true` in K8s pod | HIGH |
 
+## Beyond Pattern Matching — Semantic Analysis
+
+The grep patterns above catch known vulnerability shapes. After completing the pattern scan,
+perform semantic analysis on the code you've read:
+
+1. **For each handler/endpoint**: Read the full function. Ask: "What security assumption
+   does this code make? Can that assumption be violated?"
+
+2. **For custom abstractions**: If the codebase has custom configuration loaders, secret managers,
+   or crypto wrappers — read their implementations. Are they correct?
+   Do they handle edge cases (null, empty, unicode, concurrent calls)?
+
+3. **Cross-module flows**: If a variable passes through 3+ functions before reaching a sink,
+   follow it through every hop. One missed encoding step in the middle = vulnerability.
+
+4. **Config-specific deep analysis**:
+   - **Don't just check if headers are set — check if they're set correctly**: A CSP of `default-src *` is present but useless. HSTS without `includeSubDomains` leaves subdomains vulnerable. CORS with a regex origin check may be bypassable (`evil-example.com` matching `example.com`).
+   - **Environment-conditional config bypass**: If security settings are gated on `NODE_ENV === 'production'` or `DEBUG = os.environ.get(...)` — can an attacker influence the environment? Check for `.env` files in the repo, environment variable injection via SSRF, or config endpoints that reveal the current environment.
+   - **Secret rotation and lifecycle**: Hardcoded secrets are bad, but also check: are secrets rotated? Is there a single master secret whose compromise breaks everything? Are secrets logged, included in error messages, or returned in API responses?
+   - **Crypto implementation details**: Don't just flag "uses AES-ECB" — understand *what* is being encrypted and *why* ECB matters for that data. A single-block encryption in ECB is fine; encrypting structured data with repeated patterns is not. Check IV generation, key derivation (PBKDF2 iterations?), and mode-specific requirements.
+   - **Deployment configuration drift**: Check if there are separate config files for dev/staging/prod. Are the prod configs actually more restrictive? Look for `docker-compose.override.yml`, `.env.production`, and Kubernetes ConfigMaps/Secrets that might override secure defaults.
+
 ## Reference Files
 
 - [Configuration & crypto vulnerable patterns](references/patterns.md)

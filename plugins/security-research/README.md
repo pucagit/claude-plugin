@@ -1,6 +1,6 @@
 # Security Research Plugin for Claude Code
 
-A structured offensive security audit framework that coordinates specialized AI agents through a complete vulnerability research lifecycle — from planning through verified findings with production-grade reports.
+A skills-primary offensive security research framework. Claude performs semantic code analysis — reading and understanding code deeply — to find vulnerabilities that pattern matching misses. Skills provide methodology; the orchestrator does the work itself, maintaining continuous context throughout the audit.
 
 ## Setup
 
@@ -15,7 +15,7 @@ Open Claude Code and type in:
 
 ### 2. Install Semgrep (required)
 
-Semgrep is the SAST engine used across all phases. The orchestrator will attempt to install it automatically, but pre-installing is recommended:
+Semgrep is the SAST engine used for automated scanning. The orchestrator will attempt to install it automatically, but pre-installing is recommended:
 
 ```bash
 pip install semgrep
@@ -23,7 +23,7 @@ pip install semgrep
 
 ### 3. Install LSP servers (install only what you need)
 
-The plugin bundles configs for 12 language servers. LSP servers provide type analysis that agents use to reduce false positives, confirm code reachability, and validate PoC scripts. **You only need to install the ones matching your target's language.**
+The plugin bundles configs for 12 language servers. LSP servers provide type analysis used to reduce false positives, confirm code reachability, and validate PoC scripts. **You only need to install the ones matching your target's language.**
 
 | Language | Install Command | Binary |
 |----------|----------------|--------|
@@ -40,7 +40,7 @@ The plugin bundles configs for 12 language servers. LSP servers provide type ana
 | **Lua** | `sudo apt install lua-language-server` | `lua-language-server` |
 | **Swift** | Included with Xcode / `brew install swift` | `sourcekit-lsp` |
 
-LSP servers activate automatically when the plugin detects files matching their configured extensions. Missing binaries are silently skipped — agents fall back to grep-based analysis.
+LSP servers activate automatically when the plugin detects files matching their configured extensions. Missing binaries are silently skipped — analysis falls back to grep-based patterns.
 
 ### Verify your setup
 
@@ -56,58 +56,34 @@ semgrep --version
 
 ---
 
+## How It Works
+
+### The Key Insight
+
+Traditional SAST tools match patterns. This plugin has Claude **read and understand** code — tracing data flows through function calls, understanding algorithm invariants, analyzing object lifecycles, and reasoning about edge cases. This finds the complex, novel vulnerabilities that pattern matching misses.
+
+The approach is inspired by Anthropic's research that found 22 Firefox vulnerabilities in 2 weeks through semantic code reasoning, git history variant analysis, and algorithmic understanding.
+
+### Skills-Primary Architecture
+
+All methodology lives in **skills**. The orchestrator invokes skills as needed based on what it's finding — no rigid pipeline. This means:
+
+- **Continuous context**: Claude builds understanding of the codebase and keeps it throughout the audit, instead of losing it at every agent handoff
+- **Adaptive workflow**: If reconnaissance reveals a suspicious module, Claude can deep-dive immediately instead of waiting for "Phase 2"
+- **Self-verification**: Findings are verified inline during hunting, with adversarial disproval for high-severity issues
+- **Self-improvement**: When a technique works well, it can be captured and encoded into skills for future audits
+
+---
+
 ## End-to-End Workflow
 
-The full audit runs in two stages: **initialize** the workspace with `claude-init`, then **plan and execute** the audit with the `security-orchestrator`. The orchestrator calls `claude-init` automatically, so you typically only need one command to start — but you can also initialize manually for more control.
-
----
-
-### Stage 1: Initialize the Workspace
-
-The `claude-init` skill creates the `security_audit/` directory structure, fingerprints the tech stack, installs Semgrep, and generates the `CLAUDE.md` configuration file that all downstream agents read.
-
-**The orchestrator calls it automatically.** But you can also run it standalone — useful if you want to inspect or customize the workspace before running the audit:
-
-```
-Initialize a security audit workspace for /path/to/project/source-code
-```
-
-`claude-init` will:
-
-1. **Validate the target** — confirm the path exists and estimate codebase size
-2. **Fingerprint the tech stack** — identify language, framework, and key dependencies from manifest files (`package.json`, `requirements.txt`, `go.mod`, etc.)
-3. **Classify the system type** — Web API, Auth Service, CMS, Management System, File Processing, Native Application, or Microservice
-4. **Ask two questions interactively:**
-   - `Is there a live target instance? If yes, provide IP:PORT, or press Enter to skip.`
-   - `Credentials for the live target? (user:pass), or press Enter to skip.`
-5. **Install Semgrep** if not already available
-6. **Create the workspace** at `{parent of source}/security_audit/` with `recon/`, `findings/`, and `logs/` subdirectories
-7. **Generate `CLAUDE.md`** at the project root — this file contains all workspace paths, tech fingerprint, and vulnerability priority focus for the system type
-
-After completion, the workspace looks like this and is ready for the orchestrator:
-
-```
-project-directory/               ← PROJECT_DIR (parent of source code)
-├── source-code/                 ← TARGET_SOURCE (read-only during audit)
-├── CLAUDE.md                    ← Generated by claude-init
-└── security_audit/
-    ├── recon/
-    ├── findings/
-    └── logs/
-        └── orchestrator.log
-```
-
----
-
-### Stage 2: Plan and Execute the Audit
-
-Invoke the `security-orchestrator` to run the full four-phase audit:
+### Start an Audit
 
 ```
 Run a security audit on /path/to/project/source-code
 ```
 
-The orchestrator's first message is always an intake prompt — it **never starts executing before asking you**:
+The orchestrator's first message is always an intake prompt:
 
 ```
 I'll plan this security audit. First, I need some information:
@@ -126,121 +102,58 @@ OPTIONAL (provide any that apply):
 Let me know what applies, or say 'skip' to proceed with defaults.
 ```
 
-Provide what you have and say **skip** for anything that doesn't apply. The orchestrator then:
+### The Audit Flow
 
-1. **Calls `claude-init`** to initialize the workspace (or reuses an existing one)
-2. **Writes optional input files** to the project directory:
-   - `RULES.md` — structured scope brief from your bug bounty rules
-   - `REPORT.md` — custom report template to follow
-   - `recon/threat-model-input.md` — prior threat model for the recon agent
-3. **Presents the audit plan** for your review:
+After approval, the orchestrator works through four phases, invoking skills as needed:
 
 ```
-AUDIT PLAN
-══════════════════════════════════════════
-Target:        /path/to/source-code
-Language:      Python
-Framework:     Django
-System Type:   Web API
-Codebase:      1,240 files
-Live Target:   192.168.1.50:8000
-Credentials:   admin:admin123
-Scope Rules:   RULES.md written
-Report Format: REPORT.md written
-Threat Model:  none — will build from scratch
-
-Proposed Phases:
-  Phase 1: Reconnaissance & Code Analysis      → recon-agent
-  Phase 2: Vulnerability Hunting & PoC Dev      → vuln-hunter
-  Phase 3: Verification & FP Elimination        → verifier
-  Phase 4: Report Generation                    → reporter
-
-Focus Areas (Web API):
-  1. Injection vulnerabilities (SQLi, CMDi, SSTI, SSRF)
-  2. Broken object-level authorization (IDOR/BOLA)
-  3. Authentication & JWT issues
-
-Scope Constraints:
-  Qualifying: RCE, SQLi, Auth Bypass, IDOR, SSRF, Stored XSS
-  Excluded: Self-XSS, user enumeration, missing headers
-══════════════════════════════════════════
-
-Approve this plan to begin, or tell me what to change.
+Phase 1: RECONNAISSANCE
+┌─────────────────────────────────────────────────────────┐
+│  Orchestrator invokes skills:                            │
+│    code-review (routes, sources, sinks)                  │
+│    semgrep (secrets scan)                                │
+│    variant-analysis (git history + dependency CVEs)       │
+│    target-recon (OSINT if public)                        │
+│                                                          │
+│  Writes: intelligence.md, architecture.md,               │
+│          attack-surface.md (with Critical Module Ranking  │
+│          and Hunting Hypotheses)                         │
+└──────────────────────────┬──────────────────────────────┘
+                           ▼
+Phase 2: VULNERABILITY HUNTING
+┌─────────────────────────────────────────────────────────┐
+│  Stage A — Automated Scan (fast, broad):                 │
+│    semgrep sweep, detect-injection, detect-auth,         │
+│    detect-logic, detect-config                           │
+│    → scan-candidates.md                                  │
+│                                                          │
+│  Stage B — Deep Hypothesis Hunting (THE MAIN EVENT):     │
+│    For each high-priority target:                        │
+│      deep-dive → semantic analysis                       │
+│      verify-finding → inline self-verification           │
+│      → VULN-NNN/ with poc/ artifacts                     │
+│    Spawns subagents only for parallel independent modules │
+└──────────────────────────┬──────────────────────────────┘
+                           ▼
+Phase 3: FINAL VERIFICATION
+┌─────────────────────────────────────────────────────────┐
+│  For unverified findings:                                │
+│    verify-finding (adversarial disproval for HIGH/CRIT)  │
+│    → CONFIRMED / DOWNGRADED / FALSE_POSITIVE verdicts    │
+│    → CVSS 3.1 strings, variant expansion                 │
+│  Writes: false-positives.md                              │
+└──────────────────────────┬──────────────────────────────┘
+                           ▼
+Phase 4: REPORTING
+┌─────────────────────────────────────────────────────────┐
+│  write-report skill → report.md                          │
+│    Executive summary, findings table, vuln chains,       │
+│    remediation roadmap                                   │
+│  Custom REPORT.md template supported                     │
+└─────────────────────────────────────────────────────────┘
 ```
 
-4. **Waits for your approval** — reply with "yes", "go", "looks good", or similar.
-
----
-
-### Stage 3: The Four Phases Execute
-
-Once approved, the orchestrator spawns each agent in sequence. After each phase it runs a quality gate and re-invokes the agent if output is incomplete.
-
-#### Phase 1 — Reconnaissance (`recon-agent`)
-
-The recon-agent reads any user-provided documents in `recon/` first (threat models, API specs, architecture diagrams), then performs full code analysis by invoking three skills:
-
-| Skill | Purpose |
-|-------|---------|
-| `semgrep` | Secrets scan → `logs/semgrep-results.json` |
-| `code-review routes` | Loads framework-specific route patterns to map all endpoints |
-| `code-review sources` + `code-review sinks` | Loads source/sink taxonomy to build the source→sink matrix |
-
-Writes three required files:
-- `recon/intelligence.md` — tech stack, CVE check on versions, config security issues
-- `recon/architecture.md` — endpoint inventory with auth column, auth flows, framework protections table
-- `recon/attack-surface.md` — source→sink matrix, threat model, top-10 risk areas
-
-**Quality gate**: each file must be >20 lines; endpoint table must have auth column; source→sink matrix must have Priority/Chain/Viability columns.
-
-#### Phase 2 — Vulnerability Hunting (`vuln-hunter`)
-
-The vuln-hunter reads all recon artifacts, then hunts using Semgrep and four detection skills invoked in order:
-
-| Skill | What it loads |
-|-------|--------------|
-| `semgrep sweep` | Full SAST scan → `logs/semgrep-results.json` |
-| `detect-injection` | SQLi, CMDi, path traversal, SSTI, SSRF, XSS, deserialization, file handling |
-| `detect-auth` | IDOR/BOLA, BFLA, privilege escalation, JWT, session, OAuth, mass assignment |
-| `detect-logic` | Race conditions, workflow bypass, price manipulation, cache poisoning, rate limiting |
-| `detect-config` | Debug mode, CORS, weak crypto, hardcoded secrets, exposed endpoints |
-
-After each skill loads, the agent runs its grep patterns against the source before moving to the next. For every finding it creates a directory immediately:
-
-```
-findings/VULN-001/
-├── VULN-001.md          ← description, CWE, preliminary CVSS, source→sink chain
-└── poc/
-    ├── exploit.py       ← runnable PoC (or [UNTESTED] stub if no live target)
-    ├── request.txt      ← raw HTTP request that triggers the vulnerability
-    └── response.txt     ← captured response or expected output
-```
-
-**Quality gate**: every finding must have `file:line`, source→sink chain, and preliminary CVSS string. Zero findings triggers a re-examine pass.
-
-#### Phase 3 — Verification (`verifier`)
-
-The verifier independently re-reads source code for every finding — it never trusts the hunter's code quotations. For each `VULN-NNN.md`:
-
-1. Re-traces the source→sink chain from `TARGET_SOURCE`
-2. Checks framework protections (`architecture.md` Section 3)
-3. Runs `mcp__ide__getDiagnostics` on the vulnerable file for every HIGH/CRITICAL finding
-4. Reviews `poc/exploit.py` for correctness
-5. Assigns a verdict: **CONFIRMED**, **CONFIRMED-THEORETICAL**, **DOWNGRADED**, or **FALSE_POSITIVE**
-
-Updates each finding in-place with: final verdict, full `CVSS:3.1/AV:.../AC:.../PR:.../UI:.../S:.../C:.../I:.../A:...` string, reproducibility rating, verification notes, and mitigation steps.
-
-False positives are **not deleted** — their `poc/` evidence is preserved. The verifier sets `Status: FALSE_POSITIVE` in `VULN-NNN.md` and appends a summary with reason code to `false-positives.md`.
-
-**Quality gate**: no finding left with `Status: UNVERIFIED`; every non-FP has a full CVSS 3.1 string.
-
-#### Phase 4 — Reporting (`reporter`)
-
-The reporter reads all confirmed findings and recon artifacts, checks for a custom `REPORT.md` template, and writes `report.md`. If `REPORT.md` exists at the project root it follows that structure exactly. Otherwise it uses the built-in template.
-
-**Quality gate**: `report.md` must be ≥50 lines, include an Executive Summary, reference every VULN-NNN by ID in the findings table, and include a Remediation Roadmap.
-
-The orchestrator finishes with a completion summary:
+### Completion
 
 ```
 AUDIT COMPLETE
@@ -264,27 +177,72 @@ Output Files:
 
 ---
 
-### Running Individual Phases
+## Standalone Reporting
 
-After planning (or after `claude-init` completes), you can run any single phase:
+The reporter works independently — use it to write professional reports for your own findings:
 
 ```
-# Phase 1 only
-Run recon on /path/to/source-code
-
-# Phase 2 only
-Hunt for vulnerabilities in /path/to/source-code, audit workspace at /path/to/security_audit
-
-# Phase 3 only
-Verify the findings in /path/to/security_audit
-
-# Phase 4 only
-Generate a report from /path/to/security_audit
+Write a report for my finding: I found an SSRF in /api/webhook. The 'url' parameter
+is not validated and I can reach the AWS metadata endpoint at 169.254.169.254.
+Here's my curl command: curl -X POST ... and the response showed IAM credentials.
 ```
+
+### Custom Report Templates
+
+Create a `REPORT.md` file in the project root with your desired report structure. The reporter follows this template instead of the built-in default. This works in both pipeline and standalone mode.
 
 ---
 
-### Final Workspace Layout
+## Architecture
+
+### Agents (2)
+
+| Agent | Role |
+|-------|------|
+| **security-orchestrator** | Conducts the entire audit by invoking skills. Builds and maintains deep codebase understanding. Spawns subagents only for parallel deep-dives. |
+| **reporter** | Standalone report generation from user-supplied findings. In pipeline mode, the orchestrator writes the report itself via the write-report skill. |
+
+### Skills (13)
+
+| Skill | Type | Purpose |
+|-------|------|---------|
+| `claude-init` | Setup | Tech fingerprinting, CLAUDE.md generation, workspace creation |
+| `code-review` | Reference | Framework-specific route patterns, source/sink taxonomy |
+| `semgrep` | Tool | SAST scanning with registry rules and custom taint analysis |
+| `target-recon` | OSINT | Gather public intelligence about the target |
+| `variant-analysis` | **Recon** | Git history security analysis, dependency CVE scanning, variant pattern search |
+| `deep-dive` | **Hunting** | Exhaustive semantic analysis of a single file/module — the core methodology |
+| `detect-injection` | Detection | SQLi, CMDi, SSRF, XSS, deserialization, file handling, memory + semantic analysis |
+| `detect-auth` | Detection | IDOR/BOLA, BFLA, JWT, session, OAuth, mass assignment + semantic analysis |
+| `detect-logic` | Detection | Race conditions, workflow bypass, cache attacks, rate limiting + semantic analysis |
+| `detect-config` | Detection | Debug mode, CORS, weak crypto, exposed endpoints, containers + semantic analysis |
+| `verify-finding` | **Verification** | Adversarial disproval, CVSS 3.1 calibration, variant expansion |
+| `write-report` | **Reporting** | Report methodology, template handling, quality requirements |
+| `capture-technique` | **Learning** | Encodes successful techniques into skill files for future audits |
+
+### Quality Requirements
+
+| Phase | Requirements |
+|-------|-------------|
+| **Recon** | intelligence.md, architecture.md, attack-surface.md each >20 lines; endpoint table has auth column; source→sink matrix; Critical Module Ranking |
+| **Hunting** | Every VULN-NNN.md has: file:line, source→sink chain, CVSS string; every poc/ has exploit.py, request.txt, response.txt |
+| **Verification** | Every finding has verdict ≠ UNVERIFIED; every non-FP has full CVSS 3.1 string; false-positives.md exists |
+| **Reporting** | report.md ≥50 lines; Executive Summary heading; every VULN-NNN referenced; Remediation Roadmap section |
+
+### LSP Integration
+
+The plugin bundles configs for 12 language servers. They activate automatically based on file extensions when the binary is in PATH. Used to:
+
+- Confirm whether vulnerable code paths are reachable (not dead code)
+- Check type constraints that prevent exploitation
+- Validate PoC scripts for correctness
+- Resolve function calls and imports that grep-based analysis misses
+
+Missing LSP binaries are silently skipped — analysis falls back to grep-based patterns.
+
+---
+
+## Workspace Layout
 
 ```
 project-directory/
@@ -296,7 +254,8 @@ project-directory/
     ├── recon/
     │   ├── intelligence.md        ← Tech stack, CVEs, config issues
     │   ├── architecture.md        ← Endpoints, auth flows, framework protections
-    │   ├── attack-surface.md      ← Source→sink matrix, threat model, top risks
+    │   ├── attack-surface.md      ← Source→sink matrix, threat model, Critical Module Ranking
+    │   ├── variant-analysis.md    ← Git history patterns, dependency CVEs, variant candidates
     │   ├── threat-model-input.md  ← User-provided threat model (if provided)
     │   └── swagger.json           ← OpenAPI spec (REST APIs only)
     ├── findings/
@@ -309,150 +268,25 @@ project-directory/
     │   │       └── ...            ← Payloads, helpers, screenshots
     │   └── ...
     ├── report.md                  ← Final report
-    ├── false-positives.md         ← Rejected findings with reason codes (poc/ preserved)
+    ├── false-positives.md         ← Rejected findings with reason codes
     └── logs/
-        ├── orchestrator.log
         ├── scope_brief.md
-        └── semgrep-results.json
-```
-
----
-
-## Standalone Reporting
-
-The reporter agent works independently — you don't need to run the full pipeline. Use it to write professional reports for your own findings:
-
-```
-Write a report for my finding: I found an SSRF in /api/webhook. The 'url' parameter
-is not validated and I can reach the AWS metadata endpoint at 169.254.169.254.
-Here's my curl command: curl -X POST ... and the response showed IAM credentials.
-```
-
-The reporter will:
-1. Structure your finding into the standard format (`findings/VULN-NNN/`)
-2. Create PoC artifacts from your evidence (`poc/exploit.py`, `request.txt`, `response.txt`)
-3. Check for `REPORT.md` in the project directory for custom formatting
-4. Generate a professional `report.md`
-
-### Custom Report Templates
-
-Create a `REPORT.md` file in the project root with your desired report structure. The reporter follows this template instead of the built-in default. This works in both pipeline and standalone mode.
-
-If no `REPORT.md` exists, the reporter uses its built-in template with executive summary, findings table, vulnerability chains, remediation roadmap, and appendices.
-
----
-
-## Architecture
-
-### Agents (5)
-
-| Agent | Phase | Role | Outputs |
-|-------|-------|------|---------|
-| **security-orchestrator** | Plan + All | Collects inputs, initializes workspace, writes CLAUDE/RULES/REPORT.md, coordinates all phases | `CLAUDE.md`, `RULES.md`, `REPORT.md`, `logs/orchestrator.log` |
-| **recon-agent** | 1 | Reconnaissance + deep code architecture review | `recon/intelligence.md`, `recon/architecture.md`, `recon/attack-surface.md` |
-| **vuln-hunter** | 2 | Finds vulnerabilities AND writes PoC exploits | `findings/VULN-NNN/` directories |
-| **verifier** | 3 | Eliminates false positives, calibrates severity; keeps poc/ evidence for rejected findings | Updates findings in-place with CONFIRMED/DOWNGRADED/FALSE_POSITIVE verdict + full CVSS 3.1 string; writes `false-positives.md` |
-| **reporter** | 4 / Standalone | Generates reports from pipeline or user-supplied findings | `report.md` |
-
-### Skills (8)
-
-| Skill | Type | Used By | Purpose |
-|-------|------|---------|---------|
-| `claude-init` | Setup | orchestrator | Tech fingerprinting templates, CLAUDE.md generation, priority focus |
-| `code-review` | Reference | recon-agent | Framework-specific route patterns, source/sink taxonomy |
-| `semgrep` | Tool | recon-agent, vuln-hunter | SAST scanning with registry rules and custom taint analysis |
-| `target-recon` | OSINT | recon-agent | Gather public intelligence about the target |
-| `detect-injection` | Detection | vuln-hunter | SQLi, CMDi, SSRF, XSS, deserialization, file handling, memory |
-| `detect-auth` | Detection | vuln-hunter | IDOR/BOLA, BFLA, JWT, session, OAuth, mass assignment |
-| `detect-logic` | Detection | vuln-hunter | Race conditions, workflow bypass, cache attacks, rate limiting |
-| `detect-config` | Detection | vuln-hunter | Debug mode, CORS, weak crypto, exposed endpoints, containers |
-
-### Quality Requirements
-
-Each agent enforces measurable output quality bars. The orchestrator verifies these after each phase and re-invokes if they are not met:
-
-| Agent | Requirements |
-|-------|-------------|
-| **recon-agent** | `intelligence.md`, `architecture.md`, `attack-surface.md` each >20 lines; endpoint table has auth column; source→sink matrix has Priority/Chain/Viability columns |
-| **vuln-hunter** | Every `VULN-NNN.md` has: `file:line`, source→sink chain, preliminary CVSS string, `Status=UNVERIFIED`; every `poc/` has non-stub `exploit.py`, `request.txt`, `response.txt` |
-| **verifier** | Every non-FP `VULN-NNN.md` has: `Status` ≠ UNVERIFIED, full `CVSS:3.1/AV:.../...` string, `Verification Notes` section; `false-positives.md` exists (even if empty) |
-| **reporter** | `report.md` ≥50 lines; has `## Executive Summary` heading; references every VULN-NNN by ID in findings table; has `## Remediation Roadmap` section |
-
-CVSS scores are written in two stages: the vuln-hunter pre-fills a **preliminary** score in each finding, and the verifier replaces it with a **verified full CVSS 3.1 string** after independently re-reading the code.
-
-### LSP Integration
-
-The plugin bundles configs for 12 language servers (Python, TypeScript/JS, Go, C/C++, Rust, Java, Ruby, PHP, Kotlin, C#, Lua, Swift). They activate automatically based on file extensions when the binary is in PATH. Agents use `mcp__ide__getDiagnostics` to:
-
-- Confirm whether vulnerable code paths are reachable (not dead code)
-- Check type constraints that prevent exploitation (e.g., `int` params can't be injected)
-- Validate PoC scripts for correctness before marking them ready
-- Resolve function calls and imports that grep-based analysis misses
-
-Missing LSP binaries are silently skipped — agents fall back to grep-based analysis with no errors.
-
----
-
-## Audit Workflow Diagram
-
-```
-PLAN (mandatory — includes workspace initialization)
-┌──────────────────────────────────────────────────────────────┐
-│  security-orchestrator (plan mode)                           │
-│                                                              │
-│  Ask:   source path, IP:PORT, creds, rules, format, model    │
-│  Init:  validate target, fingerprint tech, install semgrep   │
-│  Write: CLAUDE.md, RULES.md, REPORT.md, threat-model-input   │
-│  Show:  audit plan with target classification                │
-│  Gate:  user approval required                               │
-└──────────────────────────┬───────────────────────────────────┘
-                           ▼
-Phase 1: RECON                       Phase 2: HUNT
-┌─────────────────────────┐           ┌────────────────────────┐
-│  recon-agent            │           │  vuln-hunter           │
-│                         │           │                        │
-│  Read threat model input│           │  Read recon artifacts  │
-│  Tech fingerprint       ├──────────►│  Run Semgrep           │
-│  Map endpoints          │           │  4 detect-* skills     │
-│  Trace auth flows       │           │  Write PoC per finding │
-│  Catalog protections    │           │  Analyze chains        │
-│  Build attack surface   │           │                        │
-│                         │           │  ► VULN-NNN/ dirs      │
-│  ► intelligence.md      │           │    with poc/ artifacts │
-│  ► architecture.md      │           │                        │
-│  ► attack-surface.md    │           │                        │
-└─────────────────────────┘           └────────────────────────┘
-                                               │
-                                               ▼
-Phase 4: REPORT                      Phase 3: VERIFY
-┌─────────────────────────┐           ┌────────────────────────┐
-│  reporter               │           │  verifier              │
-│                         │           │                        │
-│  Read REPORT.md template│           │  Re-read source code   │
-│  Read confirmed findings│ ◄─────────│  Trace chains indep.   │
-│  Executive summary      │           │  Check protections     │
-│  Technical details      │           │  Validate PoCs (LSP)   │
-│  Remediation roadmap    │           │  Calibrate severity    │
-│                         │           │                        │
-│  ► report.md            │           │  ► Update findings     │
-│                         │           │  ► false-positives.md  │
-└─────────────────────────┘           └────────────────────────┘
+        ├── scan-candidates.md     ← Stage A automated scan hits
+        ├── semgrep-results.json
+        └── learned-techniques.log ← Captured techniques for skill improvement
 ```
 
 ---
 
 ## Bug Bounty Integration
 
-Provide bug bounty rules during the **plan mode** intake when the orchestrator asks. Paste the program rules directly — the orchestrator structures them into `RULES.md`.
-
-Alternatively, create `RULES.md` manually before running the audit:
+Provide bug bounty rules during intake or create `RULES.md` manually:
 
 ```markdown
 # Bug Bounty Program Rules
 
 ## In-Scope Components
 - Web application v3.x at app.example.com
-- REST API at api.example.com/v2/
 
 ## Out of Scope
 - Marketing site, mobile apps, third-party integrations
@@ -467,30 +301,18 @@ Alternatively, create `RULES.md` manually before running the audit:
 - No DoS, own test accounts only, redact PII
 
 ## Report Requirements
-- Affected version required
-- Step-by-step reproduction
-- Video/screenshots demonstrating exploitation
+- Affected version required, step-by-step reproduction
 ```
-
-The orchestrator detects existing `RULES.md` during plan mode and asks whether to use it as-is or update it.
 
 ---
 
 ## Tips
 
-- **One command to start** — just tell Claude to an audit. The orchestrator handles everything: workspace setup, tech fingerprinting, Semgrep installation, CLAUDE.md generation, and plan presentation.
-
-- **Provide a threat model** — if you have existing security knowledge about the target, sharing it during plan mode saves significant recon time.
-
-- **Custom report templates** — create `REPORT.md` once for your organization and reuse it across audits.
-
-- **Large codebases** — agents use write-as-you-go protocol. Partial results are saved even if context runs out. The orchestrator retries failed phases up to 2 times.
-
-- **Focused audits** — after planning, run individual phases:
-  ```
-  Use the vuln-hunter to check /path/to/specific/module for SSRF vulnerabilities
-  ```
-
-- **Pre-placed documents** — drop architecture docs, API specs, or prior reports into `security_audit/recon/` before Phase 1. The recon-agent reads them first.
-
+- **One command to start** — just tell Claude to run an audit. The orchestrator handles everything.
+- **Provide a threat model** — sharing existing security knowledge saves recon time.
+- **Custom report templates** — create `REPORT.md` once for your organization and reuse across audits.
+- **Large codebases** — the orchestrator writes findings as it goes. Partial results are saved even if context runs out.
+- **Focused audits** — ask the orchestrator to focus on specific modules or vulnerability classes.
+- **Pre-placed documents** — drop architecture docs, API specs, or prior reports into `security_audit/recon/` before starting.
 - **Standalone reports** — use the reporter directly for your own findings without running the full pipeline.
+- **Self-improvement** — after a successful audit, the capture-technique skill can encode what worked for future audits.

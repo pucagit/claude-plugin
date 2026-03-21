@@ -191,6 +191,28 @@ For each grep hit:
 | `free(ptr); *ptr = val` | HIGH — UAF |
 | `Object.assign({}, JSON.parse(body))` | MEDIUM — prototype pollution |
 
+## Beyond Pattern Matching — Semantic Analysis
+
+The grep patterns above catch known vulnerability shapes. After completing the pattern scan,
+perform semantic analysis on the code you've read:
+
+1. **For each handler/endpoint**: Read the full function. Ask: "What security assumption
+   does this code make? Can that assumption be violated?"
+
+2. **For custom abstractions**: If the codebase has custom sanitization functions, query builders,
+   ORM extensions, or input processing utilities — read their implementations. Are they correct?
+   Do they handle edge cases (null, empty, unicode, concurrent calls)?
+
+3. **Cross-module flows**: If a variable passes through 3+ functions before reaching a sink,
+   follow it through every hop. One missed encoding step in the middle = vulnerability.
+
+4. **Injection-specific deep analysis**:
+   - **Custom query builders**: Any function that constructs SQL, NoSQL, or LDAP queries from parts — read the implementation. Does it parameterize correctly for all input types (arrays, nested objects, nulls)?
+   - **ORM extensions**: Raw query methods, custom managers, query annotations — these bypass ORM protections. Find every `.raw()`, `.extra()`, `RawSQL()` call.
+   - **Middleware mutations**: Does middleware modify `request.body` or `request.params` before the handler runs? A sanitizer on the handler is useless if middleware decoded the payload first.
+   - **Second-order injection**: Data stored safely but retrieved and used unsafely later. Trace database writes → reads → sinks. The write may be parameterized, but if the read's output is concatenated into a query elsewhere, that's injection.
+   - **Template engine context**: Even with auto-escaping, check what's passed as template context. If user input becomes a template variable name (not value), auto-escaping doesn't help.
+
 ## Reference Files
 
 - [Vulnerable code patterns by category](references/patterns.md)
