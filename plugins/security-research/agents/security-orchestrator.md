@@ -129,14 +129,192 @@ Goal: Build complete understanding of the target.
 3. Invoke skill="semgrep" args="scan secrets ${TARGET_SOURCE} --output ${AUDIT_DIR}/logs/semgrep-results.json" — find hardcoded secrets.
 4. Invoke skill="variant-analysis" args="${TARGET_SOURCE} ${AUDIT_DIR}" — analyze git history + dependency CVEs.
 5. Invoke skill="target-recon" if the project is public — gather OSINT.
-6. Write recon outputs to `{AUDIT_DIR}/recon/`:
-   - **intelligence.md** — tech stack, CVEs, config security (>20 lines)
-   - **architecture.md** — endpoints with auth column, auth flows, framework protections table (>20 lines)
-   - **attack-surface.md** — source→sink matrix, threat model, AND these new sections:
-     - **Critical Module Ranking**: Top 10 highest-risk files/modules with reasoning
-     - **Hunting Hypotheses**: Specific testable theories (e.g., "the custom query builder at db/query.py may not parameterize array inputs")
+6. Write ALL THREE recon files using the MANDATORY TEMPLATES below.
 
-**Quality gate**: Each file >20 lines, endpoint table has auth column, source→sink matrix populated. If insufficient, fix it yourself.
+**Quality gate — self-check after writing each file:**
+```bash
+for f in intelligence.md architecture.md attack-surface.md; do
+  LC=$(wc -l < "${AUDIT_DIR}/recon/$f" 2>/dev/null || echo 0)
+  [ "$LC" -gt 20 ] && echo "$f OK ($LC lines)" || echo "INSUFFICIENT: $f ($LC lines)"
+done
+grep -q "Auth Required\|Auth Column\|auth.*Y/N\|Auth.*Yes/No" "${AUDIT_DIR}/recon/architecture.md" 2>/dev/null \
+  || echo "MISSING: auth column in architecture.md endpoint table"
+grep -q "Source.*Sink\|source.*sink\|→.*sink" "${AUDIT_DIR}/recon/attack-surface.md" 2>/dev/null \
+  || echo "MISSING: source-sink matrix in attack-surface.md"
+grep -q "Critical Module Ranking" "${AUDIT_DIR}/recon/attack-surface.md" 2>/dev/null \
+  || echo "MISSING: Critical Module Ranking in attack-surface.md"
+grep -q "Hunting Hypothes" "${AUDIT_DIR}/recon/attack-surface.md" 2>/dev/null \
+  || echo "MISSING: Hunting Hypotheses in attack-surface.md"
+```
+
+If any check fails, fix the file before proceeding.
+
+---
+
+### MANDATORY RECON TEMPLATES
+
+> **HARD RULE — All three files MUST be written. Each MUST follow its template.**
+> Missing files or missing sections are NOT acceptable.
+
+#### `{AUDIT_DIR}/recon/intelligence.md`
+
+```markdown
+# Target Intelligence
+
+## System Overview
+- **System type**: [Web API / Auth Service / CMS / etc.]
+- **Purpose**: [what the system does]
+- **Data sensitivity**: [what sensitive data it handles]
+- **Deployment model**: [standalone / containerized / serverless / etc.]
+
+## Technology Stack
+
+| Technology | Version | Category | Source File | Known CVEs |
+|---|---|---|---|---|
+| [framework] | [X.Y.Z] | Web Framework | [manifest:line] | [CVE-YYYY-NNNNN or None] |
+| [database] | [X.Y.Z] | Database | [config:line] | |
+| [auth lib] | [X.Y.Z] | Authentication | [manifest:line] | |
+
+## Configuration Security
+
+### Hardcoded Secrets
+[Results from semgrep secrets scan. List each with file:line. REDACT actual values.]
+
+### Debug / Development Settings
+[Debug mode status, verbose errors, dev-only endpoints]
+
+### Security Headers
+[CORS config, CSP, HSTS, X-Frame-Options — present or absent, correct or misconfigured]
+```
+
+#### `{AUDIT_DIR}/recon/architecture.md`
+
+```markdown
+# Architecture Analysis
+
+## Endpoint Inventory
+
+| URL Pattern | Method | Handler file:line | Auth Required | Authz Check | Input Parameters |
+|---|---|---|---|---|---|
+| /api/users | GET | handlers/users.py:45 | Yes | Role: admin | query: page, limit |
+| /api/login | POST | auth/login.py:12 | No | N/A | body: email, password |
+
+### Unauthenticated Endpoints
+[List all endpoints where Auth Required = No]
+
+### Admin-Only Endpoints
+[List all endpoints requiring admin/elevated privileges]
+
+## Authentication & Authorization Flows
+
+### Login Flow
+[credential input → validation → session/token creation, with file:line at each step]
+
+### Session Management
+[storage mechanism, expiration, invalidation, fixation prevention]
+
+### Authorization Model
+[RBAC/ABAC/ACL — role definitions, permission checks, enforcement points with file:line]
+
+## Framework Protections
+
+| Protection | Mechanism | Scope | Bypass Condition |
+|---|---|---|---|
+| SQL Injection | [ORM parameterized / none] | [Global / per-query] | [.execute(raw_sql) at file:line / N/A] |
+| CSRF | [Middleware / token / none] | [Global / per-route] | [@csrf_exempt at file:line / N/A] |
+| XSS | [Auto-escape / none] | [Global / per-template] | [| safe at file:line / N/A] |
+| Path Traversal | [Normalization / none] | | |
+| Auth Enforcement | [Decorator / middleware / none] | | |
+
+[If no protections exist for a category, write the row with "None detected"]
+
+## Data Flows
+[Critical data movements: what moves where, through which components, what controls exist]
+```
+
+#### `{AUDIT_DIR}/recon/attack-surface.md`
+
+```markdown
+# Attack Surface Map
+
+## Source → Sink Matrix
+
+| Priority | Source (input) | Sink (dangerous op) | Chain (file:line at each hop) | Viability |
+|---|---|---|---|---|
+| HIGH | req.body.url (webhook handler) | requests.get(url) at fetch.py:89 | routes.py:12 → validate.py:34 → fetch.py:89 | HIGH — no URL validation |
+| MEDIUM | req.params.id (user endpoint) | db.query("..."+id) at db.py:56 | routes.py:45 → db.py:56 | LOW — ORM parameterizes |
+
+[For HIGH/MEDIUM viability chains, include step-by-step trace with file:line at each hop]
+
+## Threat Model
+
+### System Classification
+[Management System / API Backend / Auth Service / etc.]
+
+### Threat Actors
+| Actor | Access Level | Motivation | Capability |
+|---|---|---|---|
+| Unauthenticated external | Network | Data theft, service abuse | Moderate |
+| Authenticated user | Application | Privilege escalation, data access | Low-Moderate |
+
+### Prioritized Attack Vectors
+[Ranked list with rationale for each]
+
+## Critical Module Ranking
+
+Top 10 highest-risk files/modules. Ranked by: amount of untrusted input handled,
+privilege level of operations, complexity, and historical vulnerability patterns.
+
+| Rank | File/Module | Risk Reasoning |
+|---|---|---|
+| 1 | [file path] | [handles user auth + raw SQL + no input validation] |
+| 2 | [file path] | [file upload handler, no MIME validation, serves uploads same-origin] |
+| ... | | |
+
+## Hunting Hypotheses
+
+Specific, testable theories for Phase 2 deep-dive investigation.
+Each hypothesis should name a file, a potential vulnerability, and why you suspect it.
+
+1. **[Hypothesis name]**: [file:line] — [what you suspect and why]
+   _Test by_: [specific action to confirm or deny]
+2. **[Hypothesis name]**: [file:line] — [what you suspect and why]
+   _Test by_: [specific action to confirm or deny]
+3. ...
+```
+
+---
+
+#### `{AUDIT_DIR}/logs/scan-candidates.md` (written during Phase 2 Stage A)
+
+```markdown
+# Scan Candidates — Automated Detection Results
+
+## Semgrep Hits
+| Rule | File:Line | Severity | CWE | Triage |
+|---|---|---|---|---|
+| [rule-id] | [file:line] | [HIGH/MED/LOW] | [CWE-XXX] | [INVESTIGATE / FALSE_POSITIVE / DUPLICATE] |
+
+## detect-injection Hits
+[List each grep hit with file:line and initial assessment]
+
+## detect-auth Hits
+[List each grep hit with file:line and initial assessment]
+
+## detect-logic Hits
+[List each grep hit with file:line and initial assessment]
+
+## detect-config Hits
+[List each grep hit with file:line and initial assessment]
+
+## Triage Summary
+- Total candidates: N
+- To investigate in Stage B: N
+- Likely false positives: N
+- Duplicates of variant-analysis hits: N
+```
+
+---
 
 ### Phase 2: Vulnerability Hunting
 
@@ -150,7 +328,7 @@ Goal: Find real, exploitable vulnerabilities through BOTH pattern matching AND s
    - skill="detect-auth"
    - skill="detect-logic"
    - skill="detect-config"
-   Execute their grep patterns. Collect ALL candidates in `{AUDIT_DIR}/logs/scan-candidates.md`.
+   Execute their grep patterns. Write ALL candidates to `{AUDIT_DIR}/logs/scan-candidates.md` using the template above.
 
 **Stage B — Deep Hypothesis Hunting (focused, semantic — THE MAIN EVENT):**
 
@@ -160,20 +338,114 @@ Goal: Find real, exploitable vulnerabilities through BOTH pattern matching AND s
     - Read the ENTIRE module. Understand it. Trace data flows across functions.
     - Test the specific hypothesis. Look for what grep missed.
     - Self-verify each finding inline: invoke skill="verify-finding" — try to disprove before writing.
-    - If confirmed → write `findings/VULN-NNN/` immediately using the standard structure:
-      ```
-      findings/VULN-NNN/
-      ├── VULN-NNN.md
-      └── poc/
-          ├── exploit.py
-          ├── request.txt
-          └── response.txt
-      ```
+    - If confirmed → write the finding using the MANDATORY STRUCTURE below.
     - If confirmed → search for variant siblings before moving to the next module.
 
-**Parallel deep-dives**: If two high-priority modules are independent, spawn a subagent (general-purpose type) with: the deep-dive skill instructions, the target file path, and the hypothesis to test. Continue working on the other module yourself.
+**Parallel deep-dives**: If two high-priority modules are independent, spawn a subagent (general-purpose type) with: the deep-dive skill instructions, the target file path, the hypothesis to test, and the MANDATORY FINDING STRUCTURE below. Continue working on the other module yourself.
 
 **Scope enforcement**: If SCOPE_BRIEF exists, skip out_of_scope components and do NOT write findings matching non_qualifying_vulns.
+
+---
+
+### MANDATORY FINDING STRUCTURE
+
+> **HARD RULE — Every finding MUST use this exact layout. No exceptions.**
+> Flat files in `findings/` are WRONG. Each finding gets its OWN directory.
+
+```
+findings/VULN-NNN/
+├── VULN-NNN.md              # Finding writeup
+└── poc/
+    ├── exploit.py            # Runnable PoC script
+    ├── request.txt           # Raw HTTP request that triggers the vulnerability
+    ├── response.txt          # Captured response proving exploitation
+    └── [any other artifacts]  # Payloads, helper scripts, configs
+```
+
+**Self-check before moving to the next finding:**
+```bash
+ls ${AUDIT_DIR}/findings/VULN-NNN/ && ls ${AUDIT_DIR}/findings/VULN-NNN/poc/
+```
+Both must exist with the correct files before you continue.
+
+**Step A: Create the poc/ artifacts FIRST**
+
+1. `mkdir -p ${AUDIT_DIR}/findings/VULN-NNN/poc`
+2. Write **`poc/exploit.py`** — Complete, runnable PoC script with usage instructions in docstring. If no live target: write script targeting localhost and mark `[UNTESTED]`.
+3. Write **`poc/request.txt`** — Raw HTTP request (or CLI command) that triggers the vulnerability.
+4. Write **`poc/response.txt`** — Captured response proving exploitation. If untested: write expected output.
+
+**Step B: Write the finding writeup**
+
+Create `findings/VULN-NNN/VULN-NNN.md`:
+
+```markdown
+# VULN-NNN: [Title]
+
+## Metadata
+| Field | Value |
+|---|---|
+| Status | UNVERIFIED |
+| Severity | CRITICAL / HIGH / MEDIUM / LOW |
+| Confidence | HIGH / MEDIUM / LOW |
+| CWE | CWE-XXX: Name |
+| CVSS | X.X (preliminary) — CVSS:3.1/AV:.../AC:.../PR:.../UI:.../S:.../C:.../I:.../A:... |
+| Auth Required | None / User / Admin |
+| Location | `file:line` |
+| Source | [SEMGREP:rule-id] / [MANUAL] / [VARIANT:VULN-NNN] |
+
+## Description
+
+[2-3 paragraphs: what, where, why it is insecure.]
+
+## Vulnerable Code
+
+[Exact code snippet with file:line — copied from source, not paraphrased]
+
+## Source → Sink Chain
+
+1. Input at `file:line` (`param_name`)
+2. Passes through `file:line` [transformation / no sanitization]
+3. Reaches sink at `file:line` (dangerous operation)
+
+## Framework Protection Check
+
+**Protection**: [name from architecture.md Section 3, or "None applicable"]
+**Status**: Bypassed / Not applicable / Not bypassed
+**Analysis**: [why the protection does or doesn't apply]
+
+## Proof of Concept
+
+**PoC files**: [`poc/`](poc/)
+
+| File | Description |
+|---|---|
+| [`exploit.py`](poc/exploit.py) | Runnable exploit script |
+| [`request.txt`](poc/request.txt) | Raw HTTP request |
+| [`response.txt`](poc/response.txt) | Captured response |
+
+**Usage**:
+\`\`\`bash
+python3 findings/VULN-NNN/poc/exploit.py [target_url] [options]
+\`\`\`
+
+**PoC Status**: CONFIRMED / UNTESTED / FAILED — [reason]
+
+## Impact
+
+- **Confidentiality**: [specific data at risk]
+- **Integrity**: [what can be modified]
+- **Availability**: [disruption potential]
+- **Attacker Capability**: "An [auth level] attacker can [action] [resource] by [method], bypassing [control]."
+
+## Chain Potential
+
+[Can this combine with other findings? Or "None identified."]
+```
+
+**Write each finding IMMEDIATELY after confirming it.** Do not batch. Create poc/ artifacts before writing the .md so all links resolve.
+
+---
 
 ### Phase 3: Final Verification Pass
 
