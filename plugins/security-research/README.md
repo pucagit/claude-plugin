@@ -80,7 +80,7 @@ All methodology lives in **skills**. The orchestrator invokes skills as needed b
 ### Start an Audit
 
 ```
-Run a security audit on /path/to/project/source-code
+Run a security audit on /path/to/project/source-code using the security-research plugin
 ```
 
 The orchestrator's first message is always an intake prompt:
