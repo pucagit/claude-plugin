@@ -1,15 +1,15 @@
 ---
 name: verify-finding
-description: Verification methodology for security findings. 5-step verification with adversarial disproval, severity calibration via CVSS 3.1, and variant expansion. Transforms UNVERIFIED findings into CONFIRMED/DOWNGRADED/FALSE_POSITIVE with evidence.
+description: Verification methodology for security findings. 5-step verification with adversarial disproval, severity calibration via CVSS 3.1, variant expansion, and PoC execution against live targets. Transforms UNVERIFIED findings into CONFIRMED/DOWNGRADED/FALSE_POSITIVE with evidence. User-invocable for re-verification and PoC execution.
 argument-hint: "<vuln_id> <target_source> <audit_dir>"
-user-invokable: false
+user-invocable: true
 ---
 
 # Verify Finding — Adversarial Verification Methodology
 
 ## Goal
 
-Every finding is **guilty of being a false positive** until proven otherwise. This methodology independently verifies each finding through source code re-reading, PoC review, impact validation, and adversarial disproval. Target: <5% false positive rate in confirmed findings.
+Every finding is **guilty of being a false positive** until proven otherwise. This methodology independently verifies each finding through source code re-reading, PoC review, PoC execution against live targets, impact validation, and adversarial disproval. Target: <5% false positive rate in confirmed findings.
 
 ## Inputs
 
@@ -49,7 +49,101 @@ Read the PoC artifacts in `findings/VULN-NNN/poc/`:
 
 Run `mcp__ide__getDiagnostics` on `exploit.py` to catch type errors, missing imports, or incorrect API usage.
 
-### Step 3: Impact Validation
+### Step 3: PoC Execution (when live target configured)
+
+> This step runs the PoC script against an actual live target. **Skip if no live target is configured.**
+
+#### 3a: Pre-flight Checks
+
+1. Read CLAUDE.md to get `TARGET_IP`, `TARGET_PORT`, `CREDENTIALS`
+2. If TARGET_IP is "N/A" → skip this step entirely, proceed to Step 4
+3. Read `poc/exploit.py` (or `.sh`, `.rb`, `.go`, etc.) completely
+4. **Safety scan** — check for destructive operations:
+   - SQL: `DROP`, `DELETE`, `TRUNCATE`, `UPDATE` (without WHERE)
+   - File: `rm`, `unlink`, `rmdir`, `shutil.rmtree`
+   - System: `shutdown`, `reboot`, `kill`
+   - Network: hardcoded external targets (not matching TARGET_IP)
+   - If ANY destructive operation found → **WARN the user and wait for approval** before executing
+
+#### 3b: Input Validation
+
+1. Check if the script accepts target as argument (`--target`, `--host`, `--url`, `-t`, `-h`, `-u`)
+2. If the script has **hardcoded targets** (IPs, hostnames, URLs not matching TARGET_IP):
+   - Create a patched copy: `poc/exploit_patched.py`
+   - Replace hardcoded target with `TARGET_IP:TARGET_PORT`
+   - Use the patched version for execution
+3. Check required dependencies:
+   ```bash
+   # Extract imports and check availability
+   grep -E "^import |^from " poc/exploit.py | while read line; do
+     module=$(echo "$line" | awk '{print $2}' | cut -d. -f1)
+     python3 -c "import $module" 2>/dev/null || echo "MISSING: $module"
+   done
+   ```
+4. Install missing dependencies if safe to do so (standard security libs like requests, pwntools, etc.)
+
+#### 3c: Execution
+
+```bash
+# Set timeout (30 seconds default)
+TIMEOUT=30
+
+# Build command with target info
+export TARGET_IP TARGET_PORT CREDENTIALS
+
+# Execute and capture all output
+timeout ${TIMEOUT} python3 poc/exploit.py \
+  --target "${TARGET_IP}" --port "${TARGET_PORT}" \
+  2>&1 | tee poc/execution-output.txt
+
+# Capture exit code
+echo "EXIT_CODE=$?" >> poc/execution-output.txt
+```
+
+Adapt the command based on what the script actually accepts (check `--help` or read the docstring).
+
+If the script requires credentials, pass them appropriately.
+
+#### 3d: Output Verification
+
+1. Read `poc/execution-output.txt`
+2. Compare actual output against expected output documented in the finding:
+   - Does it show exploitation indicators? (shell prompt, admin access, data leak, error-based info)
+   - Does the HTTP response code match expectations?
+   - Is the response body consistent with exploitation?
+3. **Verdict**:
+   - Output matches expected → **EXECUTION_CONFIRMED**
+   - Output partially matches → **EXECUTION_PARTIAL** (document what worked and what didn't)
+   - Output doesn't match → **EXECUTION_FAILED** (document actual output)
+   - Script errors/crashes → **EXECUTION_ERROR** (document the error)
+
+#### 3e: Reproducibility Check
+
+Run the PoC a **second time** to confirm consistent results:
+```bash
+timeout ${TIMEOUT} python3 poc/exploit.py \
+  --target "${TARGET_IP}" --port "${TARGET_PORT}" \
+  2>&1 | tee poc/execution-output-run2.txt
+```
+
+Compare both runs. Document:
+- **Reliable**: Both runs produce same result
+- **Intermittent**: Results differ between runs (note: may indicate race condition)
+- **One-shot**: Second run fails (note: may indicate state-changing exploit)
+
+#### 3f: Log Execution
+
+Append to `{AUDIT_DIR}/logs/poc-execution.log`:
+```
+[TIMESTAMP] VULN-NNN: Executed poc/exploit.py against {TARGET_IP}:{TARGET_PORT}
+[TIMESTAMP] VULN-NNN: Exit code: {code}, Output: {summary}
+[TIMESTAMP] VULN-NNN: Reproducibility: {Reliable/Intermittent/One-shot}
+[TIMESTAMP] VULN-NNN: Verdict: {EXECUTION_CONFIRMED/PARTIAL/FAILED/ERROR}
+```
+
+---
+
+### Step 4: Impact Validation
 
 Does the exploit cross a **real security boundary**?
 
@@ -63,7 +157,7 @@ Does the exploit cross a **real security boundary**?
 
 If the "vulnerability" doesn't cross a security boundary, it's likely not a real finding. A SQL injection that only reads public data is lower impact than one that reads credentials.
 
-### Step 4: Adversarial Disproval
+### Step 5: Adversarial Disproval
 
 **For HIGH and CRITICAL findings — this step is mandatory.**
 
@@ -78,13 +172,13 @@ Actively try to prove the finding is **NOT exploitable**:
 If your disproval attempt **succeeds**: downgrade or mark as false positive.
 If your disproval attempt **fails**: the finding is strengthened — document why the protections are insufficient.
 
-### Step 5: Verdict
+### Step 6: Verdict
 
 Assign exactly one:
 
 | Verdict | Meaning |
 |---|---|
-| **CONFIRMED** | Verified exploitable with evidence. Source→sink chain confirmed, protections insufficient. |
+| **CONFIRMED** | Verified exploitable with evidence. Source→sink chain confirmed, protections insufficient. If PoC executed: includes execution evidence. |
 | **CONFIRMED-THEORETICAL** | Code vulnerability confirmed, but no live target to prove exploitation. Would be exploitable in a running instance. |
 | **DOWNGRADED** | Real issue, but lower severity than originally rated. State original + new severity + reason. |
 | **FALSE_POSITIVE** | Not a real vulnerability. |
@@ -128,6 +222,28 @@ Update `findings/VULN-NNN/VULN-NNN.md` in-place:
 5. Append these sections:
 
 ```markdown
+## Execution Evidence
+
+[Only if PoC was executed against live target]
+
+**Command**: `python3 poc/exploit.py --target {IP} --port {PORT}`
+**Exit code**: {code}
+**Timestamp**: {YYYY-MM-DD HH:MM:SS}
+**Reproducibility**: {Reliable / Intermittent / One-shot}
+
+### Run 1 Output
+\`\`\`
+{stdout/stderr from first execution}
+\`\`\`
+
+### Run 2 Output
+\`\`\`
+{stdout/stderr from second execution}
+\`\`\`
+
+**Execution Verdict**: {EXECUTION_CONFIRMED / EXECUTION_PARTIAL / EXECUTION_FAILED / EXECUTION_ERROR}
+**Analysis**: [What the output proves about exploitability]
+
 ## Verification Notes
 
 [What you re-read, framework protections checked, code path reachability confirmed.

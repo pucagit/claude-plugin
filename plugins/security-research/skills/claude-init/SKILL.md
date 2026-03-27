@@ -1,168 +1,149 @@
 ---
 name: claude-init
-description:  Initialize a security audit workspace for a target codebase. Provides templates and reference data used by the security-orchestrator during plan mode (CLAUDE.md template, priority focus by system type). Can also be invoked standalone to set up a workspace manually without running the full orchestrator.
-argument-hint: "<target_source_path> [--project-dir DIR] [--ip HOST] [--port PORT] [--creds user:pass]"
+description: Initialize a security audit workspace interactively. Asks the user for target information one question at a time, then runs a deterministic setup script that installs tools (semgrep, gitnexus), indexes the codebase, and creates the audit workspace. Invoke this BEFORE running the security-orchestrator.
+user-invocable: true
 ---
 
 # Security Audit Initialization
 
-Initialize a full security audit workspace for the target at `$ARGUMENTS`.
+Interactive workspace setup for security audits. This skill drives the conversation — asking questions one at a time — then delegates all deterministic setup to `setup-workspace.sh`.
 
-Parse the arguments: the first positional argument is the target source path. Optional flags:
-- `--project-dir`: working directory where audit outputs go (defaults to parent of source path)
-- `--ip` or second positional: live target IP/hostname
-- `--port` or third positional: live target port
-- `--creds`: authentication credentials (user:pass format)
+## CRITICAL FIRST-ACTION RULE
 
-Derive the project directory:
-- If `--project-dir` is provided, use that as `PROJECT_DIR`
-- Otherwise, `PROJECT_DIR` = parent directory of the target source path
+**Your FIRST action is to ask the user questions.** Do NOT run any tools until you have collected the required information. Ask one question at a time.
 
-**IMPORTANT**: All audit outputs (CLAUDE.md, security_audit/) go in `PROJECT_DIR`, NOT inside the source code directory.
+---
 
-## Step 1: Validate Target
+## Step 1: Interactive Intake
+
+Ask these questions **one at a time**, waiting for the user's response before asking the next:
+
+### Question 1 (REQUIRED)
+```
+Where is the target source code?
+(Provide the full path to the source code directory, e.g. /home/user/projects/webapp)
+```
+**STOP and wait.** Do not proceed until the user provides a path.
+
+### Question 2
+```
+Where should audit outputs go?
+(Default: parent directory of the source code. Press Enter or say "default" to accept.)
+```
+
+### Question 3
+```
+Is there a live target instance for dynamic testing?
+  a) Yes — I'll provide IP:PORT
+  b) No — static analysis only
+```
+If yes, ask for `IP:PORT` (e.g., `192.168.1.50:8080`).
+
+### Question 4 (only if live target exists)
+```
+Do you have test credentials for the live target?
+  a) Yes — I'll provide them (format: user:pass)
+  b) No credentials
+```
+
+### Question 5
+```
+Do you have any of these? (skip any that don't apply)
+  a) Bug bounty rules file (path to rules document)
+  b) Custom report template (path to template file)
+  c) Existing threat model (path or paste)
+  d) None of the above
+```
+
+---
+
+## Step 2: Run Setup Script
+
+Once all information is collected, construct the command and run the setup script:
 
 ```bash
-ls -la $0
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")" 2>/dev/null || echo "SKILL_DIR")"
+# The script is co-located with this skill file
+bash SKILL_DIR/setup-workspace.sh \
+  --source <SOURCE_PATH> \
+  --project-dir <PROJECT_DIR> \
+  [--ip <IP>] \
+  [--port <PORT>] \
+  [--creds <USER:PASS>] \
+  [--rules <RULES_FILE>] \
+  [--report-template <TEMPLATE_FILE>] \
+  [--threat-model <THREAT_MODEL_FILE>]
 ```
 
-Verify:
-- The path exists and is a directory with source files
-- Estimate codebase size with `find $0 -type f | wc -l`
-- Identify the primary language(s) by file extension counts
-
-If the target is invalid, tell the user and stop.
-
-## Step 2: Technology Fingerprint
-
-Identify by examining actual files:
-
-- **Languages**: Count files by extension (`*.py`, `*.js`, `*.go`, `*.java`, `*.php`, `*.rb`, `*.rs`, `*.c`)
-- **Frameworks**: Check for `package.json`, `pom.xml`, `requirements.txt`, `go.mod`, `Cargo.toml`, `composer.json`, `Gemfile`
-- **Build system**: Check for `Makefile`, `Dockerfile`, `docker-compose.yml`
-- **Config files**: Check for `.env`, `config.*`, `settings.*`, `application.yml`
-
-Read the primary manifest file (e.g., `package.json`, `requirements.txt`) to get exact versions.
-
-## Step 3: Interactive Intake
-
-Display what was detected:
-```
-Detected: {detected_language} / {detected_framework} / {classified_type}
+The script path is: the same directory as this SKILL.md file. Find it with:
+```bash
+# The setup script is at:
+# skills/claude-init/setup-workspace.sh (relative to plugin root)
 ```
 
-Then ask the user two questions in sequence:
+When invoking, use the absolute path based on the plugin location.
 
-1. **Live target**: `"Is there a live target instance? If yes, provide IP:PORT (e.g. 192.168.1.50:8080), or press Enter to skip."`
-2. **Credentials**: `"Credentials for the live target? (format: user:pass), or press Enter to skip."`
+**IMPORTANT**: The script outputs JSON to stdout. Parse the JSON to verify success and extract key information.
 
-Store the responses as `TARGET_IP`, `TARGET_PORT`, and `CREDENTIALS`:
-- If the user provides IP:PORT, parse and store `TARGET_IP` and `TARGET_PORT` (override any `--ip`/`--port` CLI values)
-- If the user presses Enter (skips), fall back to CLI-provided values; if none, use "N/A"
-- If the user provides credentials, store as `CREDENTIALS` (override `--creds` CLI value); if skipped, fall back to CLI or "N/A"
+---
 
-## Step 4: Install Semgrep
+## Step 3: Verify Setup
+
+After the script completes, verify:
 
 ```bash
-source /home/kali/.venv/bin/activate
-if ! command -v semgrep &> /dev/null; then
-    pip3 install semgrep
-fi
-semgrep --version
+[ -f "${PROJECT_DIR}/CLAUDE.md" ] && echo "CLAUDE.md OK" || echo "CLAUDE.md MISSING"
+[ -d "${AUDIT_DIR}/recon" ] && echo "recon/ OK" || echo "recon/ MISSING"
+[ -d "${AUDIT_DIR}/findings" ] && echo "findings/ OK" || echo "findings/ MISSING"
+[ -d "${AUDIT_DIR}/logs" ] && echo "logs/ OK" || echo "logs/ MISSING"
+[ -f "${PROJECT_DIR}/.mcp.json" ] && echo ".mcp.json OK" || echo ".mcp.json MISSING"
 ```
 
-## Step 5: Create Audit Workspace
+If any are missing, report the error to the user.
 
-Create the folder structure. `PROJECT_DIR` is the parent of the source code path (or the `--project-dir` value if provided):
+---
 
-```bash
-TARGET="$0"
-PROJECT_DIR="${PROJECT_DIR:-$(dirname "${TARGET}")}"
-AUDIT="${PROJECT_DIR}/security_audit"
-mkdir -p "${AUDIT}"/{recon,findings,logs}
-```
+## Step 4: Display Summary
 
-**The workspace is created in PROJECT_DIR (parent of source), NOT inside the source code directory.**
-
-## Step 6: Generate CLAUDE.md
-
-Generate `${PROJECT_DIR}/CLAUDE.md` using the [claude-md-template.md](claude-md-template.md) as a base. Fill in:
-
-- `{target_source}` → actual source code path
-- `{source_name}` → basename of the source path
-- `{project_dir}` → PROJECT_DIR
-- `{target_ip}`, `{target_port}`, `{credentials}` → from interactive intake or "N/A"
-- `{detected_language}` → from fingerprinting
-- `{detected_framework}` → from fingerprinting
-- `{classified_type}` → system classification (see below)
-- `{system_description}` → brief description of what the system does (derived from codebase exploration)
-- `{key_features}` → 3–5 key features found during fingerprinting
-- `{priority_section}` → from [priority-focus.md](priority-focus.md) based on system type
-
-### System Classification
-
-Classify based on what you found:
-
-| Indicators | Classification |
-|---|---|
-| Admin panels, user management, CRUD dashboards | Management System |
-| REST/GraphQL endpoints, token auth, versioned routes | Web API |
-| Login flows, OAuth/OIDC, session management | Auth Service |
-| Upload handlers, parsers, converters | File Processing |
-| CMS features, content rendering, templates | CMS |
-| C/C++/Rust, pointer arithmetic, buffer ops | Native Application |
-| Multiple services, docker-compose, gRPC | Microservice |
-
-## Step 7: Write Initialization Log
-
-Write to `${AUDIT}/logs/orchestrator.log`:
+Parse the JSON output from the script and present:
 
 ```
-[TIMESTAMP] INIT: Security audit initialized
-[TIMESTAMP] TARGET: {path}
-[TIMESTAMP] LIVE_TARGET: {ip}:{port} or N/A
-[TIMESTAMP] DETECTED: Language={lang}, Framework={framework}, Type={type}
-[TIMESTAMP] WORKSPACE: {audit_path}
-[TIMESTAMP] SEMGREP: {version}
-[TIMESTAMP] STATUS: Ready for Stage 1 (Reconnaissance)
+SECURITY AUDIT WORKSPACE INITIALIZED
+═══════════════════════════════════════════
+Source:      {source}
+Project:     {project_dir}
+Language:    {detected_language}
+Frameworks:  {detected_frameworks}
+Type:        {classified_type}
+Files:       {total_files}
+Live Target: {target_ip}:{target_port} or N/A
+Semgrep:     {semgrep_version}
+GitNexus:    {gitnexus_status} (index: {gitnexus_index})
+Workspace:   {audit_dir}
+
+Next Steps:
+  1. Run /security-research:security-orchestrator to start the audit
+  2. The orchestrator will present an audit plan for your approval
+═══════════════════════════════════════════
 ```
 
-## Step 8: Display Summary
-
-Print a clear summary:
-
-```
-SECURITY AUDIT INITIALIZED
-═══════════════════════════
-Source:     {source_path}
-Project:    {project_dir}
-Language:   {lang}
-Framework:  {framework}
-Type:       {classification}
-Live:       {ip}:{port} or N/A
-Workspace:  {audit_path}
-Semgrep:    {version}
-
-Priority Focus:
-  1. {top vuln class}
-  2. {second vuln class}
-  3. {third vuln class}
-
-Next:
-- Plan the audit — "Plan a security audit" (REQUIRED before execution)
-- The orchestrator will ask for scope, rules, report format, and other details before starting
-```
+---
 
 ## Error Handling
 
-- Target path doesn't exist → clear error, stop
-- Target is empty → warn user, allow override
-- Workspace already exists → ask: overwrite or resume?
-- Live target unreachable → warn, continue static-only
-- Language undetectable → ask user to specify
-- Semgrep install fails → warn, continue without (manual analysis only)
+| Condition | Action |
+|---|---|
+| Source path doesn't exist | Script exits with error JSON — show to user, ask for correct path |
+| Workspace already exists | Ask user: overwrite or resume? If resume, skip setup-workspace.sh |
+| semgrep install fails | Warn user, continue (manual analysis only) |
+| gitnexus install fails | Warn user, continue (grep-based tracing instead of graph queries) |
+| gitnexus indexing fails | Warn user, continue (MCP server configured but may not work) |
+| Live target unreachable | Warn, continue with static analysis only |
+
+---
 
 ## Supporting Files
 
-- [claude-md-template.md](claude-md-template.md) — CLAUDE.md template with all rules and standards
-- [priority-focus.md](priority-focus.md) — vulnerability priority by system type
+- [setup-workspace.sh](setup-workspace.sh) — Deterministic setup script (installs tools, creates workspace, generates CLAUDE.md)
+- [claude-md-template.md](claude-md-template.md) — CLAUDE.md template with audit rules and standards
+- [priority-focus.md](priority-focus.md) — Vulnerability priority by system type

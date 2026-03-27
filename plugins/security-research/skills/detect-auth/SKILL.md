@@ -2,13 +2,16 @@
 name: detect-auth
 description: Detect all authentication, authorization, and access control vulnerabilities — IDOR/BOLA, BFLA, privilege escalation, mass assignment, JWT issues, session management, OAuth/SAML, multi-tenant isolation, GraphQL introspection, and role hierarchy flaws. Consolidated detection skill for all auth/access patterns.
 argument-hint: "<target_source> <audit_dir>"
-user-invokable: false
+user-invocable: false
 ---
 
 # Authentication & Access Control Vulnerability Detection
 
 ## Goal
 Find every place where a user can access or modify resources they don't own, escalate privileges, bypass authentication/session controls, or exploit access control design flaws.
+
+## Learned Techniques
+Before hunting, read [references/cool_techniques.md](references/cool_techniques.md) for applicable auth detection techniques learned from previous audits. Apply any relevant techniques during your analysis.
 
 ## Coverage
 
@@ -154,6 +157,16 @@ grep -rn "role.*update\|update.*role\|assign.*role\|grant.*permission\|revoke.*p
 | `role = request.data.get('role')` without admin check | HIGH privesc |
 | `is_admin = serializer.validated_data.get('is_admin')` without admin check | CRITICAL |
 | Role assignment without privilege level check | HIGH |
+
+## LSP Integration
+
+Use LSP diagnostics to confirm auth/access control issues:
+
+- **`mcp__ide__getDiagnostics`** on auth middleware and decorators — verify they're correctly applied and not bypassed by type errors
+- **Find references**: For auth check functions (`@login_required`, `isAuthenticated`, `authorize()`), find ALL call sites to discover endpoints that lack auth
+- **Call hierarchy**: For privilege check functions, trace all callers to verify every admin endpoint uses them
+- **Go-to-definition**: When custom auth decorators are used, verify the implementation actually enforces the check (not a no-op or incorrectly scoped)
+- **Type constraints**: Check if user ID parameters are typed — a strongly-typed UUID prevents simple IDOR via integer manipulation
 
 ## Beyond Pattern Matching — Semantic Analysis
 

@@ -2,13 +2,16 @@
 name: detect-config
 description: Detect configuration, cryptographic, and deployment security vulnerabilities — debug mode, CORS misconfiguration, missing headers, exposed admin endpoints, default credentials, hardcoded secrets, weak password hashing, insecure RNG, ECB mode, TLS bypass, timing attacks, container/Kubernetes misconfig. Consolidated detection skill for all configuration and crypto patterns.
 argument-hint: "<target_source> <audit_dir>"
-user-invokable: false
+user-invocable: false
 ---
 
 # Configuration & Cryptographic Vulnerability Detection
 
 ## Goal
 Find security misconfigurations, deployment weaknesses, and cryptographic failures that weaken the application's security posture.
+
+## Learned Techniques
+Before hunting, read [references/cool_techniques.md](references/cool_techniques.md) for applicable config/crypto detection techniques learned from previous audits. Apply any relevant techniques during your analysis.
 
 ## Coverage
 
@@ -185,6 +188,16 @@ grep -rn "cluster-admin\|verbs.*\*\|resources.*\*\|serviceAccountName.*default\|
 | `hmac.compare_digest(s1, s2)` | FALSE POSITIVE |
 | Hardcoded `SECRET_KEY = "mysecretkey"` | HIGH |
 | `privileged: true` in K8s pod | HIGH |
+
+## LSP Integration
+
+Use LSP diagnostics to confirm config and crypto issues:
+
+- **`mcp__ide__getDiagnostics`** on crypto implementation files — catch type mismatches in key sizes, IV lengths, or cipher mode parameters
+- **Find references**: For secret/credential variables, find ALL usages to verify they're never logged, exposed in responses, or stored insecurely
+- **Go-to-definition**: For security header middleware, verify the implementation sets correct values (not just imported but not applied)
+- **Call hierarchy**: For constant-time comparison functions, verify ALL password/token checks use them (one missed = timing attack)
+- **Type constraints**: Check if environment variable reads are typed — untyped DEBUG flags that accept any truthy string are riskier
 
 ## Beyond Pattern Matching — Semantic Analysis
 

@@ -1,6 +1,6 @@
 ---
 name: target-recon
-description: Gather open-source intelligence about a target project by searching official documentation, GitHub repositories, API references, deployment guides, and public security advisories. Use during Phase 1 reconnaissance to build project understanding before source code analysis. Outputs a structured web_intelligence.md file to the audit workspace.
+description: Gather open-source intelligence about a target project by searching official documentation, GitHub repositories, API references, deployment guides, and public security advisories. Enriches CVE findings with PoC exploits from the local PoC-in-GitHub database. Use during Phase 1 reconnaissance to build project understanding before source code analysis. Outputs a structured web_intelligence.md file to the audit workspace.
 argument-hint: "<target_name> [official_url_or_github] [audit_dir]"
 ---
 
@@ -138,7 +138,7 @@ Fetch top 1–2 results. Extract:
 ## Step 7: Fetch Known Vulnerabilities & Public Disclosures
 
 ```
-WebSearch: "{TARGET_NAME} CVE security vulnerability 2023 2024 2025"
+WebSearch: "{TARGET_NAME} CVE security vulnerability 2023 2024 2025 2026"
 WebSearch: "{TARGET_NAME} security advisory patch"
 WebSearch: "{TARGET_NAME} bug bounty report disclosed"
 ```
@@ -149,9 +149,49 @@ Fetch top CVE or advisory pages. Extract:
 - Patch commits (useful for locating the vulnerable code patterns)
 - Any recurring vulnerability classes (e.g., "Frappe has had multiple SSTI issues")
 
+**Collect all CVE IDs** found in this step for the PoC lookup in Step 8.
+
 ---
 
-## Step 8: Write Output
+## Step 8: PoC-in-GitHub Lookup
+
+For every CVE ID collected from Steps 2 and 7, look up available proof-of-concept exploits from the local PoC-in-GitHub database.
+
+**For each CVE ID:**
+
+```bash
+# The lookup script is co-located with this skill file
+bash SKILL_DIR/lookup-poc.sh <CVE-ID> --top 3 --json
+```
+
+Use the absolute path to the script based on the plugin location. The script:
+1. Ensures `~/cve/PoC-in-GitHub` exists (clones if missing)
+2. Updates via `git pull`
+3. Looks up the CVE JSON file
+4. Returns top results sorted by GitHub stars
+
+**For each PoC result with `html_url`:**
+
+1. Fetch the GitHub repository page via WebFetch: `{html_url}`
+2. Fetch the README: `https://raw.githubusercontent.com/{full_name}/main/README.md` (try `master` if `main` fails)
+3. Extract from the PoC repository:
+   - Exploit type (RCE, SQLi, auth bypass, etc.)
+   - Affected versions
+   - Usage instructions / requirements
+   - Whether it's a scanner, exploit, or both
+   - Quality assessment (is it well-documented? Does it look functional?)
+4. Assess applicability to the target:
+   - Does the target version match the affected version range?
+   - Is the vulnerable component/feature present in the target?
+   - Are preconditions met (specific config, exposed endpoint, etc.)?
+
+**Skip PoC lookup** if:
+- No CVE IDs were found in Steps 2/7
+- The target is a custom/internal project with no public CVEs
+
+---
+
+## Step 9: Write Output
 
 Write `{AUDIT_DIR}/recon/web_intelligence.md` with this structure:
 
@@ -215,6 +255,25 @@ Describe the request lifecycle if documented.]
 
 **Public disclosures**: [any notable bug bounty reports or advisories]
 
+## Available PoC Exploits
+
+[For each CVE with PoCs found via lookup-poc.sh:]
+
+### CVE-YYYY-NNNNN: [Title/Description]
+
+| Repository | Stars | Type | Quality |
+|---|---|---|---|
+| [{full_name}]({html_url}) | {stars} | [exploit/scanner/both] | [High/Medium/Low] |
+
+**Best PoC**: [{full_name}]({html_url})
+- **Exploit type**: [RCE / SQLi / auth bypass / etc.]
+- **Affected versions**: [from PoC README]
+- **Usage**: [brief description of how to use]
+- **Applicability to target**: [Applicable / Not applicable / Unknown]
+  - Target version: [X.Y.Z] vs affected: [≤ A.B.C]
+  - Vulnerable component present: [yes/no/unknown]
+  - Prerequisites: [specific config, exposed endpoint, etc.]
+
 ## Security-Relevant Observations
 
 [Anything from the documentation that stands out as security-relevant:
@@ -230,6 +289,7 @@ Describe the request lifecycle if documented.]
 | Official Docs | [url] | [today's date] |
 | GitHub README | [url] | [today's date] |
 | CVE Reference | [url] | [today's date] |
+| PoC Database | ~/cve/PoC-in-GitHub | [today's date] |
 ```
 
-Confirm: "Wrote web_intelligence.md ({N} lines). Key findings: {2–3 line summary of most important security-relevant facts}."
+Confirm: "Wrote web_intelligence.md ({N} lines). Key findings: {2–3 line summary of most important security-relevant facts}. Found {N} CVEs with {M} available PoC repositories."

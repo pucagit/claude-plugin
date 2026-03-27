@@ -1,6 +1,8 @@
 # Security Research Plugin for Claude Code
 
-A skills-primary offensive security research framework. Claude performs semantic code analysis — reading and understanding code deeply — to find vulnerabilities that pattern matching misses. Skills provide methodology; the orchestrator does the work itself, maintaining continuous context throughout the audit.
+A modular offensive security research framework. Claude performs semantic code analysis — reading and understanding code deeply — to find vulnerabilities that pattern matching misses. Each skill is independently invocable, giving you full control over the audit workflow.
+
+Inspired by Anthropic's research that found 500+ zero-day vulnerabilities through semantic code reasoning, git history variant analysis, and algorithmic understanding.
 
 ## Setup
 
@@ -13,15 +15,7 @@ Open Claude Code and type in:
 /reload-plugins
 ```
 
-### 2. Install Semgrep (required)
-
-Semgrep is the SAST engine used for automated scanning. The orchestrator will attempt to install it automatically, but pre-installing is recommended:
-
-```bash
-pip install semgrep
-```
-
-### 3. Install LSP servers (install only what you need)
+### 2. Install LSP servers (install only what you need)
 
 The plugin bundles configs for 12 language servers. LSP servers provide type analysis used to reduce false positives, confirm code reachability, and validate PoC scripts. **You only need to install the ones matching your target's language.**
 
@@ -49,10 +43,9 @@ LSP servers activate automatically when the plugin detects files matching their 
 for cmd in pyright-langserver typescript-language-server gopls clangd rust-analyzer ruby-lsp jdtls intelephense lua-language-server sourcekit-lsp csharp-ls kotlin-lsp; do
   command -v $cmd &>/dev/null && echo "$cmd: OK" || echo "$cmd: not installed"
 done
-
-# Check Semgrep
-semgrep --version
 ```
+
+> **Note:** Semgrep and gitnexus are installed automatically during workspace initialization (`/security-research:claude-init`). No manual setup required.
 
 ---
 
@@ -62,134 +55,150 @@ semgrep --version
 
 Traditional SAST tools match patterns. This plugin has Claude **read and understand** code — tracing data flows through function calls, understanding algorithm invariants, analyzing object lifecycles, and reasoning about edge cases. This finds the complex, novel vulnerabilities that pattern matching misses.
 
-The approach is inspired by Anthropic's research that found 22 Firefox vulnerabilities in 2 weeks through semantic code reasoning, git history variant analysis, and algorithmic understanding.
+### Modular Architecture
 
-### Skills-Primary Architecture
-
-All methodology lives in **skills**. The orchestrator invokes skills as needed based on what it's finding — no rigid pipeline. This means:
-
-- **Continuous context**: Claude builds understanding of the codebase and keeps it throughout the audit, instead of losing it at every agent handoff
-- **Adaptive workflow**: If reconnaissance reveals a suspicious module, Claude can deep-dive immediately instead of waiting for "Phase 2"
-- **Self-verification**: Findings are verified inline during hunting, with adversarial disproval for high-severity issues
-- **Self-improvement**: When a technique works well, it can be captured and encoded into skills for future audits
+The workflow is split into independent, user-invoked skills. **You drive the workflow** — choosing what to run and when. This is more reliable than a monolithic orchestrator and matches how security professionals actually work.
 
 ---
 
-## End-to-End Workflow
+## Quick Start
 
-### Start an Audit
-
-```
-Run a security audit on /path/to/project/source-code using the security-research plugin
-```
-
-The orchestrator's first message is always an intake prompt:
+### Step 1: Initialize the workspace
 
 ```
-I'll plan this security audit. First, I need some information:
-
-REQUIRED:
-  - Source code path: where is the target source code?
-
-OPTIONAL (provide any that apply):
-  - Working directory: where should audit outputs go? (defaults to parent of source path)
-  - Target IP:PORT — live instance for dynamic testing?
-  - Credentials — test credentials?
-  - Bug bounty rules — paste or URL
-  - Report format — paste a custom template
-  - Existing threat model — paste or file path
-
-Let me know what applies, or say 'skip' to proceed with defaults.
+/security-research:claude-init
 ```
 
-### The Audit Flow
+The init skill asks you questions one at a time:
+- Where is the source code? (required)
+- Where should outputs go?
+- Is there a live target?
+- Do you have credentials?
+- Any bug bounty rules, report templates, or threat models?
 
-After approval, the orchestrator works through four phases, invoking skills as needed:
+It then runs a setup script that:
+- Detects the tech stack
+- Installs semgrep (if missing)
+- Installs gitnexus and indexes the codebase for source-to-sink flow queries
+- Creates the audit workspace
+- Generates CLAUDE.md with audit rules and target info
+
+### Step 2: Run the security audit
+
+```
+/security-research:security-orchestrator
+```
+
+The orchestrator reads the workspace created by claude-init, presents an audit plan for your approval, then executes three phases:
 
 ```
 Phase 1: RECONNAISSANCE
-┌─────────────────────────────────────────────────────────┐
-│  Orchestrator invokes skills:                            │
-│    code-review (routes, sources, sinks)                  │
-│    semgrep (secrets scan)                                │
-│    variant-analysis (git history + dependency CVEs)       │
-│    target-recon (OSINT if public)                        │
-│                                                          │
-│  Writes: intelligence.md, architecture.md,               │
-│          attack-surface.md (with Critical Module Ranking  │
-│          and Hunting Hypotheses)                         │
-└──────────────────────────┬──────────────────────────────┘
-                           ▼
+┌──────────────────────────────────────────────────────────┐
+│  code-review (routes, sources, sinks)                     │
+│  semgrep (secrets scan)                                   │
+│  variant-analysis (git history + dependency CVEs)          │
+│  target-recon (OSINT + PoC-in-GitHub lookups)             │
+│  gitnexus (source-to-sink flow mapping)                   │
+│  Algorithm inventory, state machine extraction,            │
+│  git variant seeding, PoC cross-reference                 │
+│                                                           │
+│  → intelligence.md, architecture.md, attack-surface.md    │
+│    (with Critical Module Ranking + Hunting Hypotheses)    │
+└────────────────────────┬──────────────────────────────────┘
+                         ▼
 Phase 2: VULNERABILITY HUNTING
-┌─────────────────────────────────────────────────────────┐
-│  Stage A — Automated Scan (fast, broad):                 │
-│    semgrep sweep, detect-injection, detect-auth,         │
-│    detect-logic, detect-config                           │
-│    → scan-candidates.md                                  │
-│                                                          │
-│  Stage B — Deep Hypothesis Hunting (THE MAIN EVENT):     │
-│    For each high-priority target:                        │
-│      deep-dive → semantic analysis                       │
-│      verify-finding → inline self-verification           │
-│      → VULN-NNN/ with poc/ artifacts                     │
-│    Spawns subagents only for parallel independent modules │
-└──────────────────────────┬──────────────────────────────┘
-                           ▼
+┌──────────────────────────────────────────────────────────┐
+│  Stage A — Automated Scan (fast, broad):                  │
+│    semgrep sweep, detect-injection, detect-auth,          │
+│    detect-logic, detect-config                            │
+│    → scan-candidates.md                                   │
+│                                                           │
+│  Stage B — Deep Hypothesis Hunting (THE MAIN EVENT):      │
+│    For each high-priority target:                         │
+│      deep-dive → semantic analysis                        │
+│      verify-finding → inline self-verification            │
+│      → VULN-NNN/ with poc/ artifacts                      │
+│    Spawns subagents only for parallel independent modules  │
+└────────────────────────┬──────────────────────────────────┘
+                         ▼
 Phase 3: FINAL VERIFICATION
-┌─────────────────────────────────────────────────────────┐
-│  For unverified findings:                                │
-│    verify-finding (adversarial disproval for HIGH/CRIT)  │
-│    → CONFIRMED / DOWNGRADED / FALSE_POSITIVE verdicts    │
-│    → CVSS 3.1 strings, variant expansion                 │
-│  Writes: false-positives.md                              │
-└──────────────────────────┬──────────────────────────────┘
-                           ▼
-Phase 4: REPORTING
-┌─────────────────────────────────────────────────────────┐
-│  write-report skill → report.md                          │
-│    Executive summary, findings table, vuln chains,       │
-│    remediation roadmap                                   │
-│  Custom REPORT.md template supported                     │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  For unverified findings:                                 │
+│    verify-finding (adversarial disproval for HIGH/CRIT)   │
+│    → CONFIRMED / DOWNGRADED / FALSE_POSITIVE verdicts     │
+│    → CVSS 3.1 strings, variant expansion                  │
+│  → false-positives.md                                     │
+└──────────────────────────────────────────────────────────┘
 ```
 
-### Completion
+### Step 3: Post-audit actions (as needed)
 
+After the orchestrator completes, you have several options:
+
+#### Re-verify findings or execute PoCs against a live target
 ```
-AUDIT COMPLETE
-══════════════════════════════════════════
-Target:        /path/to/source-code
-System Type:   Web API
-
-Results:
-  Findings:    8 total
-  Confirmed:   5
-  False Pos:   3
-  By Severity: 1C / 2H / 2M / 0L
-
-Output Files:
-  Report:      security_audit/report.md
-  Findings:    security_audit/findings/VULN-*/
-  Recon:       security_audit/recon/
-  FP Log:      security_audit/false-positives.md
-══════════════════════════════════════════
+/security-research:verify-finding
 ```
+Re-verifies specific findings with adversarial disproval. If a live target is configured, **actually executes the PoC script**, captures output, checks reproducibility, and updates the finding with execution evidence.
+
+#### Generate a report
+```
+/security-research:write-report
+```
+Or use the **reporter agent** directly for standalone report generation from your own findings:
+```
+Write a report for my finding: I found an SSRF in /api/webhook...
+```
+
+#### Run another audit pass
+```
+/security-research:iterative-audit
+```
+Reads all previous findings, attack surfaces, and a coverage tracker to identify what was missed. Generates new hunting hypotheses from unexplored modules, untested hypotheses, variant expansion, and new techniques. Presents a focused plan for your approval, then hunts the gaps. Tracks coverage across runs and recommends when to stop.
+
+#### Capture a successful technique
+```
+/security-research:capture-technique
+```
+When you find a great vulnerability through a novel approach, capture it for future audits. The technique is stored in the specific detection skill's `references/cool_techniques.md` file (e.g., injection techniques go to `detect-injection/references/cool_techniques.md`). Each skill reads its own techniques before hunting.
 
 ---
 
-## Standalone Reporting
-
-The reporter works independently — use it to write professional reports for your own findings:
+## Full Workflow Diagram
 
 ```
-Write a report for my finding: I found an SSRF in /api/webhook. The 'url' parameter
-is not validated and I can reach the AWS metadata endpoint at 169.254.169.254.
-Here's my curl command: curl -X POST ... and the response showed IAM credentials.
+┌─────────────────────────────────────────────────────────┐
+│  YOU: /security-research:claude-init                     │
+│  → Interactive questions → setup-workspace.sh            │
+│  → Workspace ready, tools installed, codebase indexed    │
+└────────────────────────┬────────────────────────────────┘
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│  YOU: /security-research:security-orchestrator           │
+│  → Phase 1: Recon (enhanced with gitnexus + PoC lookup) │
+│  → Phase 2: Hunting (detect-* + deep-dive)              │
+│  → Phase 3: Verification (adversarial disproval)         │
+│  → Summary + next steps                                  │
+└────────────────────────┬────────────────────────────────┘
+                         ▼
+        ┌────────────────┼────────────────┐
+        ▼                ▼                ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│ verify-      │ │ write-report │ │ iterative-   │
+│ finding      │ │              │ │ audit        │
+│              │ │ Generate a   │ │              │
+│ Re-verify +  │ │ professional │ │ Another pass │
+│ execute PoCs │ │ report       │ │ on gaps      │
+└──────┬───────┘ └──────────────┘ └──────┬───────┘
+       │                                  │
+       │         ┌──────────────┐         │
+       └────────►│ capture-     │◄────────┘
+                 │ technique    │
+                 │              │
+                 │ Save what    │
+                 │ worked       │
+                 └──────────────┘
 ```
-
-### Custom Report Templates
-
-Create a `REPORT.md` file in the project root with your desired report structure. The reporter follows this template instead of the built-in default. This works in both pipeline and standalone mode.
 
 ---
 
@@ -199,46 +208,74 @@ Create a `REPORT.md` file in the project root with your desired report structure
 
 | Agent | Role |
 |-------|------|
-| **security-orchestrator** | Conducts the entire audit by invoking skills. Builds and maintains deep codebase understanding. Spawns subagents only for parallel deep-dives. |
-| **reporter** | Standalone report generation from user-supplied findings. In pipeline mode, the orchestrator writes the report itself via the write-report skill. |
+| **security-orchestrator** | Conducts the audit (Phases 1-3) by invoking skills. Builds and maintains deep codebase understanding. Reads workspace from claude-init. |
+| **reporter** | Standalone report generation from user-supplied findings. |
 
-### Skills (13)
+### Skills (14)
 
-| Skill | Type | Purpose |
-|-------|------|---------|
-| `claude-init` | Setup | Tech fingerprinting, CLAUDE.md generation, workspace creation |
-| `code-review` | Reference | Framework-specific route patterns, source/sink taxonomy |
-| `semgrep` | Tool | SAST scanning with registry rules and custom taint analysis |
-| `target-recon` | OSINT | Gather public intelligence about the target |
-| `variant-analysis` | **Recon** | Git history security analysis, dependency CVE scanning, variant pattern search |
-| `deep-dive` | **Hunting** | Exhaustive semantic analysis of a single file/module — the core methodology |
-| `detect-injection` | Detection | SQLi, CMDi, SSRF, XSS, deserialization, file handling, memory + semantic analysis |
-| `detect-auth` | Detection | IDOR/BOLA, BFLA, JWT, session, OAuth, mass assignment + semantic analysis |
-| `detect-logic` | Detection | Race conditions, workflow bypass, cache attacks, rate limiting + semantic analysis |
-| `detect-config` | Detection | Debug mode, CORS, weak crypto, exposed endpoints, containers + semantic analysis |
-| `verify-finding` | **Verification** | Adversarial disproval, CVSS 3.1 calibration, variant expansion |
-| `write-report` | **Reporting** | Report methodology, template handling, quality requirements |
-| `capture-technique` | **Learning** | Encodes successful techniques into skill files for future audits |
+| Skill | User-Invocable | Purpose |
+|-------|:-:|---------|
+| `claude-init` | **Yes** | Interactive workspace setup — asks questions, runs setup script, installs tools, indexes codebase |
+| `code-review` | No | Framework-specific route patterns, source/sink taxonomy, LSP-enhanced endpoint mapping |
+| `semgrep` | No | SAST scanning with registry rules and custom taint analysis |
+| `target-recon` | No | OSINT gathering + PoC-in-GitHub database lookup for known CVE exploits |
+| `variant-analysis` | No | Git history security analysis, dependency CVE scanning, variant pattern search |
+| `deep-dive` | No | Exhaustive semantic analysis of a single file/module — LSP-enhanced, the core methodology |
+| `detect-injection` | No | SQLi, CMDi, SSRF, XSS, deserialization, file handling, memory + LSP + semantic analysis |
+| `detect-auth` | No | IDOR/BOLA, BFLA, JWT, session, OAuth, mass assignment + LSP + semantic analysis |
+| `detect-logic` | No | Race conditions, workflow bypass, cache attacks, rate limiting + LSP + semantic analysis |
+| `detect-config` | No | Debug mode, CORS, weak crypto, exposed endpoints, containers + LSP + semantic analysis |
+| `verify-finding` | **Yes** | Adversarial disproval, CVSS 3.1 calibration, **PoC execution against live targets**, variant expansion |
+| `write-report` | No | Report methodology, template handling, quality requirements (used by reporter agent) |
+| `capture-technique` | **Yes** | Stores successful techniques in per-skill `references/cool_techniques.md` for future audits |
+| `iterative-audit` | **Yes** | Stateful multi-pass auditing with coverage tracking across runs |
+
+### Scripts (2)
+
+| Script | Location | Purpose |
+|--------|----------|---------|
+| `setup-workspace.sh` | `skills/claude-init/` | Deterministic workspace setup — tech detection, tool installation, gitnexus indexing, CLAUDE.md generation |
+| `lookup-poc.sh` | `skills/target-recon/` | PoC-in-GitHub database lookup — clones/updates repo, finds CVE PoCs, sorts by GitHub stars |
 
 ### Quality Requirements
 
 | Phase | Requirements |
 |-------|-------------|
-| **Recon** | intelligence.md, architecture.md, attack-surface.md each >20 lines; endpoint table has auth column; source→sink matrix; Critical Module Ranking |
+| **Recon** | intelligence.md, architecture.md, attack-surface.md each >20 lines; endpoint table has auth column; source→sink matrix; Critical Module Ranking; Algorithm Inventory |
 | **Hunting** | Every VULN-NNN.md has: file:line, source→sink chain, CVSS string; every poc/ has exploit.py, request.txt, response.txt |
 | **Verification** | Every finding has verdict ≠ UNVERIFIED; every non-FP has full CVSS 3.1 string; false-positives.md exists |
-| **Reporting** | report.md ≥50 lines; Executive Summary heading; every VULN-NNN referenced; Remediation Roadmap section |
 
 ### LSP Integration
 
-The plugin bundles configs for 12 language servers. They activate automatically based on file extensions when the binary is in PATH. Used to:
+The plugin bundles configs for 12 language servers in `plugin.json`. They activate automatically based on file extensions when the binary is in PATH. Used across skills for:
 
-- Confirm whether vulnerable code paths are reachable (not dead code)
-- Check type constraints that prevent exploitation
-- Validate PoC scripts for correctness
-- Resolve function calls and imports that grep-based analysis misses
+- **Code-review**: Find all references to auth decorators, discover endpoints missing auth
+- **Detection skills**: Confirm type constraints, trace call hierarchies for sinks, validate custom sanitizers
+- **Deep-dive**: Go-to-definition for every function call, build call trees, check types at each data flow step
+- **Verify-finding**: `mcp__ide__getDiagnostics` to confirm reachability, type constraints, PoC correctness
 
 Missing LSP binaries are silently skipped — analysis falls back to grep-based patterns.
+
+### Code Intelligence (gitnexus)
+
+[gitnexus](https://github.com/abhigyanpatwari/GitNexus) is installed during `claude-init` and configured as an MCP server. It provides graph-powered code intelligence:
+
+- **Source-to-sink mapping**: Query all data flows from external inputs to dangerous operations
+- **Call graphs**: Trace function calls across files and modules
+- **Symbol references**: Find all usages of a function, variable, or type
+- Particularly valuable for cross-module flows that grep-based analysis misses
+
+### PoC-in-GitHub Database
+
+The `lookup-poc.sh` script integrates with [nomi-sec/PoC-in-GitHub](https://github.com/nomi-sec/PoC-in-GitHub) — a database of 8,500+ CVEs with links to GitHub PoC repositories. During target-recon:
+
+1. For each dependency CVE found, the script looks up available PoCs
+2. Results are sorted by GitHub stars (most popular/reliable first)
+3. Claude fetches the top PoC repositories and reads their READMEs
+4. Assesses applicability to the target (version match, config requirements)
+5. Documents findings in `web_intelligence.md`
+
+The database is auto-cloned on first use (`~/cve/PoC-in-GitHub`) and updated via `git pull` on each lookup.
 
 ---
 
@@ -248,14 +285,17 @@ Missing LSP binaries are silently skipped — analysis falls back to grep-based 
 project-directory/
 ├── source-code/                   ← Target (read-only during audit)
 ├── CLAUDE.md                      ← Generated by claude-init
+├── .mcp.json                      ← gitnexus MCP server config
 ├── RULES.md                       ← Bug bounty rules (if provided)
 ├── REPORT.md                      ← Custom report template (if provided)
 └── security_audit/
     ├── recon/
-    │   ├── intelligence.md        ← Tech stack, CVEs, config issues
-    │   ├── architecture.md        ← Endpoints, auth flows, framework protections
-    │   ├── attack-surface.md      ← Source→sink matrix, threat model, Critical Module Ranking
+    │   ├── intelligence.md        ← Tech stack, CVEs, PoC availability, config issues
+    │   ├── architecture.md        ← Endpoints, auth flows, framework protections, state machines
+    │   ├── attack-surface.md      ← Source→sink matrix, algorithm inventory, Critical Module Ranking
+    │   ├── web_intelligence.md    ← OSINT findings + enriched CVE/PoC data
     │   ├── variant-analysis.md    ← Git history patterns, dependency CVEs, variant candidates
+    │   ├── coverage-tracker.md    ← Iterative audit coverage tracking (created by iterative-audit)
     │   ├── threat-model-input.md  ← User-provided threat model (if provided)
     │   └── swagger.json           ← OpenAPI spec (REST APIs only)
     ├── findings/
@@ -265,14 +305,16 @@ project-directory/
     │   │       ├── exploit.py     ← Runnable PoC script
     │   │       ├── request.txt    ← Raw HTTP request
     │   │       ├── response.txt   ← Captured response / expected output
+    │   │       ├── execution-output.txt  ← Actual PoC execution output (if executed)
     │   │       └── ...            ← Payloads, helpers, screenshots
     │   └── ...
-    ├── report.md                  ← Final report
     ├── false-positives.md         ← Rejected findings with reason codes
     └── logs/
-        ├── scope_brief.md
+        ├── orchestrator.log       ← Initialization log
+        ├── scope_brief.md         ← Scope constraints from RULES.md
         ├── scan-candidates.md     ← Stage A automated scan hits
-        ├── semgrep-results.json
+        ├── semgrep-results.json   ← Semgrep output
+        ├── poc-execution.log      ← PoC execution history (if verify-finding executed PoCs)
         └── learned-techniques.log ← Captured techniques for skill improvement
 ```
 
@@ -280,7 +322,7 @@ project-directory/
 
 ## Bug Bounty Integration
 
-Provide bug bounty rules during intake or create `RULES.md` manually:
+Provide bug bounty rules during `claude-init` or create `RULES.md` manually:
 
 ```markdown
 # Bug Bounty Program Rules
@@ -308,11 +350,13 @@ Provide bug bounty rules during intake or create `RULES.md` manually:
 
 ## Tips
 
-- **One command to start** — just tell Claude to run an audit. The orchestrator handles everything.
-- **Provide a threat model** — sharing existing security knowledge saves recon time.
+- **Two commands to start** — `claude-init` sets up the workspace, `security-orchestrator` runs the audit. That's it.
+- **Provide a threat model** — sharing existing security knowledge during init saves recon time.
 - **Custom report templates** — create `REPORT.md` once for your organization and reuse across audits.
 - **Large codebases** — the orchestrator writes findings as it goes. Partial results are saved even if context runs out.
 - **Focused audits** — ask the orchestrator to focus on specific modules or vulnerability classes.
 - **Pre-placed documents** — drop architecture docs, API specs, or prior reports into `security_audit/recon/` before starting.
-- **Standalone reports** — use the reporter directly for your own findings without running the full pipeline.
-- **Self-improvement** — after a successful audit, the capture-technique skill can encode what worked for future audits.
+- **Iterate** — run `iterative-audit` after the initial pass. Not every vulnerability is found in one run. The coverage tracker shows what's been explored and what hasn't.
+- **Capture what works** — after a great find, run `capture-technique` to save the methodology for future audits. Techniques accumulate in each skill's references folder.
+- **PoC execution** — if you have a live target, `verify-finding` will actually run your PoC scripts and capture output. Safety checks prevent destructive operations.
+- **Standalone reports** — use the reporter agent directly for your own findings without running the full audit.

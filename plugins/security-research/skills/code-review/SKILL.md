@@ -10,6 +10,15 @@ Parse `$ARGUMENTS` to determine mode: `routes`, `sources`, or `sinks`.
 
 ---
 
+## LSP Integration
+
+Use LSP to enhance code review accuracy:
+
+- **Find references**: For auth decorators/middleware, find ALL usages to discover endpoints missing auth
+- **Go-to-definition**: For custom auth functions, verify they actually enforce the check
+- **Call hierarchy**: For route handlers, build the call tree to understand what sinks they reach
+- **Workspace symbols**: Find all controller/handler classes to ensure complete endpoint inventory
+
 ## Mode: `routes`
 
 Find all route declarations and map auth decorators alongside each one.

@@ -2,7 +2,7 @@
 name: variant-analysis
 description: Analyze git history for security-related commits, scan dependency manifests for known CVEs, and search the codebase for unfixed variant patterns. Produces variant-analysis.md with security commits, dependency CVEs, and variant candidates.
 argument-hint: "<target_source> <audit_dir>"
-user-invokable: false
+user-invocable: false
 ---
 
 # Variant Analysis — Git History, Dependency CVEs & Pattern Variants
@@ -12,6 +12,9 @@ user-invokable: false
 Find vulnerabilities by analyzing what was *already found and fixed* — in this codebase's git history and in public CVE databases for its dependencies — then search for unfixed siblings of those patterns.
 
 This is one of the highest-value techniques in security research. If a pattern was dangerous enough to fix once, the same pattern likely exists elsewhere in the codebase unfixed.
+
+## Learned Techniques
+Before analysis, read [references/cool_techniques.md](references/cool_techniques.md) for applicable variant analysis techniques learned from previous audits. Apply any relevant techniques during your analysis.
 
 ## Inputs
 

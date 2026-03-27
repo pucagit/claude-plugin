@@ -2,13 +2,16 @@
 name: detect-logic
 description: Detect business logic, concurrency, and API-specific vulnerabilities — race conditions, TOCTOU, double-spend, workflow bypass, price/quantity manipulation, cache poisoning/deception, distributed lock issues, rate limiting gaps, GraphQL DoS, excessive data exposure, and webhook security. Consolidated detection skill for all logic/timing/API patterns.
 argument-hint: "<target_source> <audit_dir>"
-user-invokable: false
+user-invocable: false
 ---
 
 # Business Logic, Concurrency & API Vulnerability Detection
 
 ## Goal
 Find flaws in application logic, timing, and API design that allow users to violate business rules, exploit race conditions, abuse caching, or exploit API-specific weaknesses.
+
+## Learned Techniques
+Before hunting, read [references/cool_techniques.md](references/cool_techniques.md) for applicable logic detection techniques learned from previous audits. Apply any relevant techniques during your analysis.
 
 ## Coverage
 
@@ -208,6 +211,16 @@ grep -rn "webhook\|X-Hub-Signature\|verify.*signature\|hmac.*verify\|webhook.*se
 | Webhook URL not validated against internal IPs | HIGH SSRF |
 | Webhook signature missing entirely | HIGH |
 | `hmac.compare_digest(sig1, sig2)` | FALSE POSITIVE (constant-time) |
+
+## LSP Integration
+
+Use LSP diagnostics to confirm logic and concurrency issues:
+
+- **`mcp__ide__getDiagnostics`** on files with race condition candidates — check for type errors in atomic operations or lock usage
+- **Find references**: For lock/mutex objects, verify ALL critical sections use them (missed locks = race condition)
+- **Call hierarchy**: For state transition functions, find all callers to verify state checks are enforced at every entry point
+- **Go-to-definition**: For cache key construction functions, verify they include all security-relevant parameters (unkeyed headers = cache poisoning)
+- **Type constraints**: Check if quantity/price fields are typed as positive integers or have validation — prevents negative quantity attacks
 
 ## Beyond Pattern Matching — Semantic Analysis
 

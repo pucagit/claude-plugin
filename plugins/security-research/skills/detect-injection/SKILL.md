@@ -2,13 +2,16 @@
 name: detect-injection
 description: Detect all input-to-sink vulnerabilities — SQLi, NoSQLi, CMDi, path traversal, SSTI, SSRF, XSS, deserialization/XXE, file handling, and memory corruption (C/C++ only). Consolidated detection skill covering all cases where user-controlled data reaches a dangerous operation.
 argument-hint: "<target_source> <audit_dir>"
-user-invokable: false
+user-invocable: false
 ---
 
 # Input-to-Sink Vulnerability Detection
 
 ## Goal
 Find all places where user-controlled data reaches a dangerous sink without adequate sanitization, parameterization, or validation.
+
+## Learned Techniques
+Before hunting, read [references/cool_techniques.md](references/cool_techniques.md) for applicable injection detection techniques learned from previous audits. Apply any relevant techniques during your analysis.
 
 ## Coverage
 
@@ -190,6 +193,18 @@ For each grep hit:
 | `printf(user_format)` | HIGH — format string |
 | `free(ptr); *ptr = val` | HIGH — UAF |
 | `Object.assign({}, JSON.parse(body))` | MEDIUM — prototype pollution |
+
+## LSP Integration
+
+Use LSP diagnostics to reduce false positives and confirm exploitability:
+
+- **`mcp__ide__getDiagnostics`** on files with grep hits — check for type errors, dead code, unreachable paths
+- **Type constraints**: If a parameter is typed as `int` or `enum`, string injection is impossible — mark as FALSE POSITIVE
+- **Call hierarchy**: For functions that wrap dangerous sinks, use LSP to find ALL callers and check if any pass user-controlled input
+- **Go-to-definition**: When custom sanitization functions are referenced, use LSP to jump to their implementation and verify correctness
+- **Find references**: For a dangerous sink function, find ALL call sites across the codebase (catches what grep misses due to aliasing or re-exports)
+
+LSP is especially valuable for statically-typed languages (Java, Go, TypeScript, Rust, C/C++) where type constraints can eliminate entire vulnerability classes.
 
 ## Beyond Pattern Matching — Semantic Analysis
 

@@ -1,27 +1,28 @@
 ---
 name: capture-technique
-description: Self-improvement skill. When a high-quality vulnerability is found and the user gives positive feedback, this skill analyzes what worked well and updates the relevant skill file to encode that knowledge for future audits.
+description: Self-improvement skill. When a high-quality vulnerability is found, this skill analyzes what worked well and stores the technique in the appropriate detection skill's references/cool_techniques.md file for future audits. User-invoked only.
 argument-hint: "[finding_id] [target_skill]"
-user-invokable: true
+user-invocable: true
 ---
 
-# Capture Technique — Encode Successful Approaches for Future Audits
+# Capture Technique — Store Successful Approaches for Future Audits
 
 ## Goal
 
-When you find a vulnerability through a novel or effective technique, and the user confirms it's a good find, capture what worked so future audits benefit from that knowledge.
+When you find a vulnerability through a novel or effective technique, capture what worked so future audits benefit from that knowledge. Techniques are stored in the **specific detection skill's** `references/cool_techniques.md` file so each skill only sees techniques relevant to its domain.
 
-## Triggers
+## When to Use
 
-- User gives positive feedback: "great find", "exactly right", "this is what I was looking for", "nice", "perfect"
-- User explicitly asks: "capture what you just did as a technique" or "remember this approach"
-- Orchestrator invokes after a confirmed HIGH/CRITICAL finding that used a non-obvious technique
+This skill is **user-invoked only**. The user will call it when:
+- They see a good finding and want to capture the methodology
+- They explicitly ask: "capture what you just did as a technique" or "remember this approach"
+- After a confirmed HIGH/CRITICAL finding that used a non-obvious technique
 
 ## Procedure
 
 ### Step 1: Identify the Success
 
-- What finding or approach did the user praise?
+- What finding or approach is being captured?
 - Which file/module was involved?
 - What vulnerability class was discovered?
 - Was this a finding that the automated detect-* patterns would have caught, or did it require deeper reasoning?
@@ -52,35 +53,34 @@ Formulate a concise, reusable technique:
 
 ### Step 4: Determine Target Skill
 
-Which skill should this technique improve?
+Which skill should this technique be stored in?
 
-| Discovery Method | Target Skill |
-|---|---|
-| Novel injection pattern | `detect-injection` |
-| Auth/access control insight | `detect-auth` |
-| Business logic/timing flaw | `detect-logic` |
-| Config/crypto weakness | `detect-config` |
-| Deep code reasoning insight | `deep-dive` |
-| Git history/variant technique | `variant-analysis` |
-| Verification technique | `verify-finding` |
+| Discovery Method | Target Skill | File |
+|---|---|---|
+| Novel injection pattern | `detect-injection` | `detect-injection/references/cool_techniques.md` |
+| Auth/access control insight | `detect-auth` | `detect-auth/references/cool_techniques.md` |
+| Business logic/timing flaw | `detect-logic` | `detect-logic/references/cool_techniques.md` |
+| Config/crypto weakness | `detect-config` | `detect-config/references/cool_techniques.md` |
+| Deep code reasoning insight | `deep-dive` | `deep-dive/references/cool_techniques.md` |
+| Git history/variant technique | `variant-analysis` | `variant-analysis/references/cool_techniques.md` |
 
-### Step 5: Update the Skill
+### Step 5: Store the Technique
 
-1. Read the target skill's `SKILL.md`
-2. Check for a `## Learned Techniques` section at the end — create it if it doesn't exist
-3. Count existing techniques — if already at **5 techniques**, ask the user which older one to replace
-4. Append the new technique:
+1. Read the target skill's `references/cool_techniques.md`
+2. Append the new technique in this format:
 
 ```markdown
 ### [Technique Name] (learned [YYYY-MM-DD])
 **When to apply**: [conditions — language, framework, vuln class, code pattern]
 **Technique**: [what to do — the specific approach that worked]
-**Example**: [concrete example from the audit where this was discovered]
+**Example**: [concrete example from the audit where this was discovered, anonymized]
 ```
+
+3. Write the updated file
 
 ### Step 6: Log
 
-Append to `{AUDIT_DIR}/logs/learned-techniques.log`:
+If an `AUDIT_DIR` is available (check CLAUDE.md), append to `{AUDIT_DIR}/logs/learned-techniques.log`:
 
 ```
 [YYYY-MM-DD HH:MM] Technique: [name] | Target skill: [skill name] | Finding: [VULN-NNN or description]
@@ -88,8 +88,8 @@ Append to `{AUDIT_DIR}/logs/learned-techniques.log`:
 
 ## Guard Rails
 
-- **Maximum 5 learned techniques per skill file** — prevents bloat. If at capacity, ask which to replace.
 - **Only genuinely novel insights** — if the technique is already covered by the skill's existing patterns or methodology, skip. Don't add "check for SQL injection in query builders" to detect-injection — that's already there.
-- **Never modify core methodology sections** — only append to `## Learned Techniques` at the end of the skill file.
+- **Never modify core methodology sections** — only append to `references/cool_techniques.md`.
 - **Keep techniques concise** — each should be 3-5 lines. If it takes a paragraph to explain, it's too complex for a quick reference.
-- **Anonymize examples** — don't include target-specific details (company names, internal URLs, credentials) in skill files that persist across audits.
+- **Anonymize examples** — don't include target-specific details (company names, internal URLs, credentials) in technique files that persist across audits.
+- **Check for duplicates** — read the existing cool_techniques.md before adding. Don't store the same technique twice.

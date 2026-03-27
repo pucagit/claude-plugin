@@ -2,7 +2,7 @@
 name: deep-dive
 description: Exhaustive semantic analysis methodology for a single file or module. Read code deeply, understand every function, trace data flows, analyze state machines, reason about edge cases, and find vulnerabilities that pattern matching misses.
 argument-hint: "<file_or_module_path>"
-user-invokable: false
+user-invocable: false
 ---
 
 # Deep-Dive — Semantic Vulnerability Analysis
@@ -13,12 +13,28 @@ Exhaustively analyze a single file or module for security vulnerabilities throug
 
 **Quality bar**: Every finding must include the full reasoning chain demonstrating *why* the code is vulnerable. "It matches a pattern" is not sufficient — you must demonstrate understanding of the code's behavior.
 
+## Learned Techniques
+Before analysis, read [references/cool_techniques.md](references/cool_techniques.md) for applicable deep-dive techniques learned from previous audits. Apply any relevant techniques during your analysis.
+
 ## When to Use
 
 - On high-priority modules identified in `attack-surface.md` Critical Module Ranking
 - On files flagged by variant analysis or automated scan candidates
 - On complex code that handles untrusted input, authentication, authorization, or sensitive operations
 - When pattern-based detection found nothing but the module handles high-risk operations
+
+## LSP Integration
+
+LSP is critical for deep semantic analysis. Use it throughout the procedure:
+
+- **`mcp__ide__getDiagnostics`** on the target file — identify type errors, unused variables, unreachable code paths before deep analysis
+- **Go-to-definition**: For EVERY function call in the module, jump to its implementation. Do not guess what a function does — read it. LSP makes this instant.
+- **Find references**: For dangerous functions (sinks), find ALL callers across the entire codebase. This catches cross-module flows that manual grep misses.
+- **Call hierarchy**: Build the complete call tree for critical functions. Identify all paths from external input to the function.
+- **Hover/type info**: Check the types of variables at each step in the data flow. Type narrowing can eliminate false positives (e.g., a value typed as `Literal["a", "b"]` can't be injected).
+- **Workspace symbols**: Find all implementations of an interface or abstract class to identify polymorphic dispatch targets.
+
+Use LSP proactively — don't wait until verification. It accelerates understanding and catches things that reading alone misses.
 
 ## Procedure
 
