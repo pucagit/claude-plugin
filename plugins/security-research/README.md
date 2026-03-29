@@ -83,6 +83,18 @@ It then runs a setup script that:
 - Creates the audit workspace
 - Generates CLAUDE.md with audit rules and target info
 
+### Step 1.5 (Optional): Set up a live testing environment
+
+```
+/security-research:setup-target
+```
+
+Creates a Docker Compose environment from the target source code — using existing Dockerfiles, public Docker images, or building from source. Seeds test accounts at each privilege level and sample data for IDOR testing. Auto-updates CLAUDE.md with live target info.
+
+You can also pass custom configs: `/security-research:setup-target` with "debug mode enabled, weak CORS, no CSRF" to test specific attack surfaces.
+
+This step is optional — the orchestrator works with static analysis alone. But having a live target enables PoC execution during verification.
+
 ### Step 2: Run the security audit
 
 ```
@@ -135,11 +147,17 @@ Phase 3: FINAL VERIFICATION
 
 After the orchestrator completes, you have several options:
 
+#### Spin up a testing environment (if not done in Step 1.5)
+```
+/security-research:setup-target
+```
+Creates a Docker Compose environment from the source code to test theoretical findings. Supports custom security configs (debug mode, weak CORS, specific DB versions) for targeted testing. Auto-updates CLAUDE.md so verify-finding can execute PoCs immediately.
+
 #### Re-verify findings or execute PoCs against a live target
 ```
 /security-research:verify-finding
 ```
-Re-verifies specific findings with adversarial disproval. If a live target is configured, **actually executes the PoC script**, captures output, checks reproducibility, and updates the finding with execution evidence.
+Re-verifies specific findings with adversarial disproval. If a live target is configured (via setup-target or manually), **actually executes the PoC script**, captures output, checks reproducibility, and updates the finding with execution evidence.
 
 #### Generate a report
 ```
@@ -173,6 +191,13 @@ When you find a great vulnerability through a novel approach, capture it for fut
 │  → Workspace ready, tools installed, codebase indexed    │
 └────────────────────────┬────────────────────────────────┘
                          ▼
+              ┌─────────────────────┐
+              │  (OPTIONAL)          │
+              │  setup-target        │
+              │  → Docker Compose    │
+              │  → Live target ready │
+              └──────────┬──────────┘
+                         ▼
 ┌─────────────────────────────────────────────────────────┐
 │  YOU: /security-research:security-orchestrator           │
 │  → Phase 1: Recon (enhanced with gitnexus + PoC lookup) │
@@ -181,23 +206,16 @@ When you find a great vulnerability through a novel approach, capture it for fut
 │  → Summary + next steps                                  │
 └────────────────────────┬────────────────────────────────┘
                          ▼
-        ┌────────────────┼────────────────┐
-        ▼                ▼                ▼
-┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-│ verify-      │ │ write-report │ │ iterative-   │
-│ finding      │ │              │ │ audit        │
-│              │ │ Generate a   │ │              │
-│ Re-verify +  │ │ professional │ │ Another pass │
-│ execute PoCs │ │ report       │ │ on gaps      │
-└──────┬───────┘ └──────────────┘ └──────┬───────┘
-       │                                  │
-       │         ┌──────────────┐         │
-       └────────►│ capture-     │◄────────┘
-                 │ technique    │
-                 │              │
-                 │ Save what    │
-                 │ worked       │
-                 └──────────────┘
+   ┌─────────────┬───────┼───────┬──────────────┐
+   ▼             ▼       ▼       ▼              ▼
+┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐
+│ setup- │ │verify- │ │ write- │ │iterate │ │capture │
+│ target │ │finding │ │ report │ │ audit  │ │  tech  │
+│        │ │        │ │        │ │        │ │        │
+│ Spin up│ │Execute │ │Report  │ │Another │ │Save    │
+│ target │ │PoCs    │ │        │ │pass    │ │what    │
+│        │ │        │ │        │ │        │ │worked  │
+└────────┘ └────────┘ └────────┘ └────────┘ └────────┘
 ```
 
 ---
@@ -211,11 +229,12 @@ When you find a great vulnerability through a novel approach, capture it for fut
 | **security-orchestrator** | Conducts the audit (Phases 1-3) by invoking skills. Builds and maintains deep codebase understanding. Reads workspace from claude-init. |
 | **reporter** | Standalone report generation from user-supplied findings. |
 
-### Skills (14)
+### Skills (15)
 
 | Skill | User-Invocable | Purpose |
 |-------|:-:|---------|
 | `claude-init` | **Yes** | Interactive workspace setup — asks questions, runs setup script, installs tools, indexes codebase |
+| `setup-target` | **Yes** | Docker Compose testing environment — builds from source/public images, seeds test data, auto-configures CLAUDE.md |
 | `code-review` | No | Framework-specific route patterns, source/sink taxonomy, LSP-enhanced endpoint mapping |
 | `semgrep` | No | SAST scanning with registry rules and custom taint analysis |
 | `target-recon` | No | OSINT gathering + PoC-in-GitHub database lookup for known CVE exploits |
@@ -230,12 +249,13 @@ When you find a great vulnerability through a novel approach, capture it for fut
 | `capture-technique` | **Yes** | Stores successful techniques in per-skill `references/cool_techniques.md` for future audits |
 | `iterative-audit` | **Yes** | Stateful multi-pass auditing with coverage tracking across runs |
 
-### Scripts (2)
+### Scripts (3)
 
 | Script | Location | Purpose |
 |--------|----------|---------|
 | `setup-workspace.sh` | `skills/claude-init/` | Deterministic workspace setup — tech detection, tool installation, gitnexus indexing, CLAUDE.md generation |
 | `lookup-poc.sh` | `skills/target-recon/` | PoC-in-GitHub database lookup — clones/updates repo, finds CVE PoCs, sorts by GitHub stars |
+| `deploy-target.sh` | `skills/setup-target/` | Docker Compose lifecycle — build, start, health check, seed, extract access info, cleanup |
 
 ### Quality Requirements
 
@@ -308,6 +328,11 @@ project-directory/
     │   │       ├── execution-output.txt  ← Actual PoC execution output (if executed)
     │   │       └── ...            ← Payloads, helpers, screenshots
     │   └── ...
+    ├── target-env/                ← Docker testing environment (created by setup-target)
+    │   ├── Dockerfile             ← Generated or copied from source
+    │   ├── docker-compose.yml     ← App + services (DB, cache, queue)
+    │   ├── .env                   ← Environment vars, credentials, custom configs
+    │   └── seed.sh                ← Database seeding script
     ├── false-positives.md         ← Rejected findings with reason codes
     └── logs/
         ├── orchestrator.log       ← Initialization log
