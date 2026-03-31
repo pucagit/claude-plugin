@@ -98,7 +98,7 @@ This step is optional — the orchestrator works with static analysis alone. But
 ### Step 2: Run the security audit
 
 ```
-/security-research:security-orchestrator
+Run a full security audit using the security-research plugin
 ```
 
 The orchestrator reads the workspace created by claude-init, presents an audit plan for your approval, then executes three phases:
