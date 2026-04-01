@@ -122,7 +122,7 @@ GitNexus:    {gitnexus_status} (index: {gitnexus_index})
 Workspace:   {audit_dir}
 
 Next Steps:
-  1. Run /security-research:security-orchestrator to start the audit
+  1. Prompt: "Run a full security audit using the security-research plugin"
   2. The orchestrator will present an audit plan for your approval
 ═══════════════════════════════════════════
 ```
