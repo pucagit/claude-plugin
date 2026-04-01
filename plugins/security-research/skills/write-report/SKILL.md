@@ -2,7 +2,6 @@
 name: write-report
 description: Report generation methodology for security audits. Handles mode detection (pipeline vs standalone), custom template support, and produces a professional report with executive summary, findings table, vulnerability chains, and remediation roadmap.
 argument-hint: "<audit_dir> [--project-dir <project_dir>]"
-user-invocable: false
 ---
 
 # Write Report — Security Assessment Report Generation
