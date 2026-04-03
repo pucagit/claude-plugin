@@ -345,11 +345,12 @@ Goal: Find real, exploitable vulnerabilities through BOTH pattern matching AND s
 **Stage A — Automated Scan (fast, broad):**
 
 7. Invoke skill="semgrep" args="sweep ${TARGET_SOURCE} --output ${AUDIT_DIR}/logs/semgrep-results.json" — full SAST scan.
-8. Invoke all four detection skills in order:
+8. Invoke all five detection skills in order:
    - skill="detect-injection" args="${TARGET_SOURCE} ${AUDIT_DIR}"
    - skill="detect-auth" args="${TARGET_SOURCE} ${AUDIT_DIR}"
    - skill="detect-logic" args="${TARGET_SOURCE} ${AUDIT_DIR}"
    - skill="detect-config" args="${TARGET_SOURCE} ${AUDIT_DIR}"
+   - skill="detect-memory" args="${TARGET_SOURCE} ${AUDIT_DIR}"
    Execute their grep patterns. Write ALL candidates to `{AUDIT_DIR}/logs/scan-candidates.md` using the template above.
 
 **Stage B — Deep Hypothesis Hunting (focused, semantic — THE MAIN EVENT):**

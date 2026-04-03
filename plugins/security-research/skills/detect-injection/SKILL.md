@@ -1,6 +1,6 @@
 ---
 name: detect-injection
-description: Detect all input-to-sink vulnerabilities — SQLi, NoSQLi, CMDi, path traversal, SSTI, SSRF, XSS, deserialization/XXE, file handling, and memory corruption (C/C++ only). Consolidated detection skill covering all cases where user-controlled data reaches a dangerous operation.
+description: Detect all input-to-sink vulnerabilities — SQLi, NoSQLi, CMDi, path traversal, SSTI, SSRF, XSS, deserialization/XXE, and file handling. Consolidated detection skill covering all cases where user-controlled data reaches a dangerous operation.
 argument-hint: "<target_source> <audit_dir>"
 user-invocable: false
 ---
@@ -24,7 +24,8 @@ Before hunting, read [references/cool_techniques.md](references/cool_techniques.
 | **XSS** | Stored, reflected, DOM-based, template auto-escape bypass (|safe, {!!), unsafe markdown, client-side template injection, dangerouslySetInnerHTML, v-html |
 | **Deserialization/XXE** | Python pickle/yaml.load, Java ObjectInputStream, .NET BinaryFormatter, PHP unserialize, Ruby Marshal, Node serialize, XXE via DTD, XStream, JSON TypeNameHandling |
 | **Header/Protocol** | CRLF injection, log injection, SMTP injection, HTTP request smuggling, cache poisoning, prototype pollution |
-| **Memory** | Buffer overflow, use-after-free, double free, format string, integer overflow, OOB access (C/C++/unsafe Rust only) |
+
+> **Note:** For memory safety vulnerabilities (buffer overflow, UAF, format string, integer overflow, unsafe bindings), see `detect-memory`.
 
 ## Grep Patterns
 
@@ -148,14 +149,6 @@ grep -rn "Object\.assign(\|merge(\|extend(\|defaultsDeep(\|_\.merge(\|deepmerge(
   --include="*.js" --include="*.ts" ${TARGET_SOURCE} | grep -v "test\|spec"
 ```
 
-### Memory Corruption (C/C++ only — skip if not applicable)
-```bash
-grep -rn "strcpy(\|strcat(\|gets(\|sprintf(\|vsprintf(" --include="*.c" --include="*.cpp" --include="*.h" ${TARGET_SOURCE}
-grep -rn "printf(\|fprintf(\|syslog(" --include="*.c" --include="*.cpp" ${TARGET_SOURCE}
-grep -rn "\bfree(\b\|delete \b" --include="*.c" --include="*.cpp" ${TARGET_SOURCE}
-grep -rn "unsafe {" --include="*.rs" ${TARGET_SOURCE}
-```
-
 ## Detection Process
 
 For each grep hit:
@@ -189,9 +182,6 @@ For each grep hit:
 | `tarfile.extractall(filter='data')` | FALSE POSITIVE |
 | SVG upload served same-origin | HIGH — stored XSS |
 | `wkhtmltopdf` rendering user HTML | HIGH — SSRF |
-| `strcpy(fixed_buf, user_str)` | CRITICAL — buffer overflow |
-| `printf(user_format)` | HIGH — format string |
-| `free(ptr); *ptr = val` | HIGH — UAF |
 | `Object.assign({}, JSON.parse(body))` | MEDIUM — prototype pollution |
 
 ## LSP Integration
