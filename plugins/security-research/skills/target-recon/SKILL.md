@@ -137,19 +137,46 @@ Fetch top 1–2 results. Extract:
 
 ## Step 7: Fetch Known Vulnerabilities & Public Disclosures
 
+### 7a. GitHub Security Advisories (primary source)
+
+**Always fetch the project's GitHub Security Advisories first.** This is where maintainers publish the newest disclosed vulnerabilities — often days or weeks before they propagate to NVD/MITRE. Skipping this step is the most common reason recon misses fresh CVEs.
+
+```
+WebFetch: https://github.com/{owner}/{repo}/security/advisories
+WebFetch: https://github.com/{owner}/{repo}/security/advisories?state=published
+WebFetch: https://api.github.com/repos/{owner}/{repo}/security-advisories?per_page=30&state=published
+```
+
+The API endpoint (`/security-advisories`) returns structured JSON and is the most reliable source. Fall back to the HTML page if the API returns empty (some repos publish only via the UI). Also try the GHSA database directly:
+
+```
+WebFetch: https://github.com/advisories?query=repo%3A{owner}%2F{repo}
+```
+
+For each advisory found, extract:
+- **GHSA ID** (e.g., `GHSA-xxxx-xxxx-xxxx`) and any associated **CVE ID**
+- Severity (CVSS v3 score and vector) and CWE
+- Affected version ranges and patched version(s)
+- Publication date and last-updated date
+- Linked patch commit(s) — usually visible in the advisory body or "References" section
+- Summary of the vulnerability class
+
+### 7b. Broaden via web search
+
 ```
 WebSearch: "{TARGET_NAME} CVE security vulnerability 2023 2024 2025 2026"
 WebSearch: "{TARGET_NAME} security advisory patch"
 WebSearch: "{TARGET_NAME} bug bounty report disclosed"
+WebSearch: "{TARGET_NAME} site:github.com/advisories"
 ```
 
 Fetch top CVE or advisory pages. Extract:
-- CVE IDs with CVSS scores and affected versions
+- CVE IDs with CVSS scores and affected versions (cross-reference with GHSA IDs from 7a)
 - Vulnerability classes that have historically affected this project
 - Patch commits (useful for locating the vulnerable code patterns)
 - Any recurring vulnerability classes (e.g., "Frappe has had multiple SSTI issues")
 
-**Collect all CVE IDs** found in this step for the PoC lookup in Step 8.
+**Collect all CVE IDs and GHSA IDs** found in this step for the PoC lookup in Step 8. If an advisory has a GHSA ID but no CVE assigned yet, still record it — the patch commit alone is enough to locate vulnerable code.
 
 ---
 
@@ -247,13 +274,17 @@ Describe the request lifecycle if documented.]
 
 ## Known Vulnerabilities
 
-| CVE | Severity | Affected Versions | Vuln Class | Patched |
-|---|---|---|---|---|
-| [CVE-XXXX-XXXXX] | [HIGH] | [≤ X.Y.Z] | [SSTI / SQLi / etc.] | [yes/no] |
+Sourced from GitHub Security Advisories (GHSA) + NVD/MITRE + web search. List newest first.
+
+| GHSA / CVE | Severity (CVSS) | Affected Versions | Vuln Class (CWE) | Patched In | Patch Commit | Published |
+|---|---|---|---|---|---|---|
+| [GHSA-xxxx-xxxx-xxxx] / [CVE-XXXX-XXXXX] | [HIGH 8.1] | [≤ X.Y.Z] | [SSTI / SQLi / CWE-79] | [X.Y.Z+1] | [commit sha or url] | [YYYY-MM-DD] |
 
 **Recurring vulnerability classes**: [patterns that appear multiple times in history]
 
 **Public disclosures**: [any notable bug bounty reports or advisories]
+
+**GHSA-only (no CVE assigned yet)**: [list any advisories that have a GHSA ID but no CVE — these are typically the freshest disclosures]
 
 ## Available PoC Exploits
 
