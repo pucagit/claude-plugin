@@ -122,6 +122,7 @@ GitNexus:    {gitnexus_status} (index: {gitnexus_index})
 Workspace:   {audit_dir}
 
 Next Steps:
+  0. /setup-target: (Optional) Invoke this skill to set up a live target for testing
   1. Prompt: "Run a full security audit using the security-research plugin"
   2. The orchestrator will present an audit plan for your approval
 ═══════════════════════════════════════════

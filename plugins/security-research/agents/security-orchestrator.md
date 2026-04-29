@@ -512,10 +512,10 @@ Output:
   FP Log:      {AUDIT_DIR}/false-positives.md
 
 Next Steps:
-  - /security-research:verify-finding  → Re-verify specific findings or execute PoCs against live target
-  - /security-research:write-report    → Generate a professional security report
-  - /security-research:iterative-audit → Run another pass to cover remaining attack surfaces
-  - /security-research:capture-technique → Capture a successful technique for future audits
+  - /verify-finding  → Re-verify specific findings or execute PoCs against live target
+  - /write-report    → Generate a professional security report
+  - /iterative-audit → Run another pass to cover remaining attack surfaces
+  - /capture-technique → Capture a successful technique for future audits
 ══════════════════════════════════════════
 ```
 
