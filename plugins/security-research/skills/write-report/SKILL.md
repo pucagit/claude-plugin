@@ -14,7 +14,9 @@ user-invocable: true
 
 ## Goal
 
-Generate a fully self-contained, reproducible vulnerability advisory for a single confirmed finding or exploitation chain. The output must be shareable without any audit session context — no VULN-NNN identifiers, no cross-finding references, no internal metadata.
+Produce a self-contained advisory a maintainer can read in under a minute and act on. Lead with the bug, the impact, and the fix. Skip throat-clearing, leading paragraphs, restating the title, and explanations of obvious things. The reader is a maintainer, not a manager.
+
+No VULN-NNN identifiers, no cross-finding references, no audit session metadata anywhere in the output.
 
 ## Invocation
 
@@ -47,7 +49,7 @@ Execute in this order:
    ```bash
    cat {audit_dir}/findings/VULN-NNN/VULN-NNN.md
    ```
-   Extract: Title, Severity, CVSS, CWE, Status, root cause description, affected file/line, code snippets, impact, affected product info, reproducibility.
+   Extract: Title, Severity, CVSS, CWE, Status, root cause, affected file/line, code snippets, impact, affected product info, reproducibility.
 
 4. **Read all PoC artifacts**
    ```bash
@@ -85,90 +87,73 @@ Execute in this order:
 
 ### Template Priority
 
-1. **If `{PROJECT_DIR}/REPORT.md` exists**: Read it entirely. Use its exact structure, section headings, and ordering. Fill each section with data from the finding. Do not add or remove sections from the template.
+1. **If `{PROJECT_DIR}/REPORT.md` exists**: read it entirely. Use its exact structure, section headings, and ordering. Fill each section with data from the finding. Do not add or remove sections.
 
-2. **If no custom template**: Use the advisory format below.
+2. **If no custom template**: use the lean format below.
 
 ### Default Advisory Format
 
-```markdown
-# Advisory: [Vuln Title — descriptive, no VULN-ID, no finding numbers]
+A maintainer must understand the vuln and its impact within 30 seconds. Lead with the bug, what it does, where it is, and how to fix it. Cut every section that has nothing concrete to say.
 
-## Advisory Details
-**Title:** [Full descriptive title — include affected component, vuln class, and impact]
+````markdown
+# [Vuln Title — what + where, e.g., "Heap OOB write in FooModule.parse()"]
 
-## Summary
-[3-4 sentences: what the bug is, how it's triggered by an attacker, what the impact is, what prerequisites the attacker needs]
+**Severity:** [Critical/High/Medium/Low] — CVSS 3.1: X.X (`CVSS:3.1/AV:.../AC:.../PR:.../UI:.../S:.../C:.../I:.../A:...`)
+**CWE:** CWE-XXX [name] (+ CWE-YYY if secondary)
+**Affected:** [Package] [version range] — fixed in [version or "unfixed"]
 
-## Details
+## Impact
+[One sentence: what an attacker achieves (RCE / data read / auth bypass / DoS) and the precondition (network reachable, authenticated user, specific config flag).]
 
-### Root Cause: [Issue description] (CWE-XXX)
-**File:** `path/to/file.c`
-**Function:** `FunctionName()` (line ~NNN)
+## Root Cause
+**File:** `path/to/file.c:NNN` — `FunctionName()`
 
-[Vulnerable code block with inline comments pointing to the exact bug]
+```c
+// only the relevant lines, with ONE inline comment marking the exact bug
+```
 
-**Root Cause:** [Paragraph explaining WHY this code is vulnerable — the missing check, wrong assumption, or unsafe operation]
-**Primitive:** [One line: what exploitation primitive this provides, e.g., "Arbitrary write to adjacent heap memory"]
+[One sentence naming the missing check or wrong assumption. No filler.]
 
-### Exploitation Chain
-1. **[Step Name]:** [What the attacker does and what it achieves — specific commands or operations]
-2. **[Step Name]:** [Next step...]
-(continue for all steps)
+## Exploitation
+[Numbered steps. Each step = one action + what it achieves. No prose between steps. Omit this section if the bug is single-step.]
 
-### Binary Hardening
-| Binary | PIE | NX | Canary | RELRO |
-|--------|-----|----|--------|-------|
-| [name] | Yes/No | Yes/No | Yes/No | Full/Partial/None |
+1. **[Action]:** [Result]
+2. **[Action]:** [Result]
+
+(Include `### Binary Hardening` table only if the target is a native binary and hardening is load-bearing for the chain.)
 
 ## PoC
 
-- **`poc.py`** — [One sentence description of what the script does]
-
-Expected output:
-​```
-[Paste the exact verified execution output from execution-output.txt]
-​```
-
-### Prerequisites / Special Conditions
-1. [First requirement — e.g., specific module version, config flag, auth level, OS/arch]
-2. [Second requirement...]
-(list all from the finding's prerequisites section)
-
-### Reproduction Steps
-1. Run `./setup.sh` to start the vulnerable environment
-2. Run `python3 poc.py --host 127.0.0.1 --port <PORT> --cmd "id"`
-3. Expected output: [paste expected output]
-
-## Impact
-[1-2 sentences: concrete business/security impact (RCE, data exfiltration, etc.) and who is affected (authenticated users, network-accessible, etc.)]
-
-## Affected Products
-- **Ecosystem:** [e.g., Redis, npm, PyPI]
-- **Package name:** [exact package name]
-- **Affected versions:** [version range]
-- **Patched versions:** [patched version or "Not yet patched"]
-
-## Severity
-**[Critical / High / Medium / Low]**
-
-**CVSS:3.1/AV:.../AC:.../PR:.../UI:.../S:.../C:.../I:.../A:...** — Score: X.X
-
-- **AV:...** — [one-line justification]
-- **AC:...** — [one-line justification]
-- **PR:...** — [one-line justification]
-- **UI:...** — [one-line justification]
-- **S:...** — [one-line justification]
-- **C/I/A:...** — [one-line justification]
-
-## Weaknesses
-- **CWE-XXX:** [Full CWE name] (primary)
-- **CWE-YYY:** [Full CWE name] (secondary, if applicable)
-
-## Recommended Fix
-1. [Specific code fix — include a code block showing the corrected implementation]
-2. [Build hardening or configuration recommendation, if applicable]
+Run:
 ```
+./setup.sh
+python3 poc.py --host 127.0.0.1 --port <PORT> --cmd "id"
+```
+
+Expected output (verified):
+```
+[Paste exact execution-output.txt content]
+```
+
+Prerequisites: [comma-separated, only if non-trivial — e.g., "module loaded with `enable-debug yes`, x86_64 glibc target". Omit the line entirely if there are none beyond running the setup.]
+
+## Fix
+```diff
+- vulnerable line
++ corrected line
+```
+
+[One sentence on the fix only if a non-obvious tradeoff exists. Otherwise nothing.]
+````
+
+### Format Rules
+
+- **One header block, not five.** Severity, CWE, and Affected go in the top metadata block. No separate "Advisory Details", "Summary", "Weaknesses", or "Affected Products" sections.
+- **No Summary section.** Title + Impact already summarize.
+- **No CVSS metric-by-metric justification.** The vector string is self-documenting. Add a one-line note only if a metric is non-obvious (e.g., explain `S:C` scope change).
+- **Drop empty sections.** No exploitation chain → drop "Exploitation". No hardening relevance → drop the table. No PoC → see "no-PoC fallback" below.
+- **No leading paragraphs.** Don't open a section with "This vulnerability allows…" — the title and Impact line have already established that. Get to the technical content immediately.
+- **Code blocks contain code, not prose.** Inline comments in code are fine; full-sentence narration above the block is usually redundant.
 
 ### Prohibited Content in report.md
 
@@ -177,6 +162,7 @@ Do NOT include any of the following — scan the completed report.md and remove 
 - References to other vulnerabilities ("see also", "related finding", "in combination with")
 - Audit session metadata (scan start/end dates, orchestrator log paths, semgrep run IDs)
 - Placeholder text: TBD, TODO, [placeholder], N/A without explanation
+- Filler phrasing: "It is important to note that…", "This vulnerability is significant because…", "In conclusion…", marketing-style severity adjectives ("devastating", "critical implications")
 
 ## setup.sh
 
@@ -237,12 +223,13 @@ Copy the verified exploit from `findings/VULN-NNN/poc/exploit.py`. Do NOT rewrit
 
 **If no PoC exists** (Status is CONFIRMED-THEORETICAL, or `poc/` directory is empty or missing `exploit.py`):
 - Omit `poc.py` from the output folder entirely
-- In `report.md` under the PoC section, write: "No executable PoC available — vulnerability confirmed via code analysis only."
+- In `report.md` under the PoC section, write only: `No executable PoC — confirmed via code analysis.`
 
 ### Prohibited Content in poc.py
 - Any `VULN-` string anywhere in the file
 - Any comment referencing other findings or vulnerabilities
 - Hardcoded host/port/command that can't be overridden by the user
+- Tutorial-style narration comments ("Now we will send the payload to trigger…")
 
 ## Quality Bar
 
@@ -252,17 +239,16 @@ Run these checks on all generated files before declaring the task complete:
 # No VULN- references in any output file
 grep -r "VULN-" {audit_dir}/reports/<short_name>/ && echo "FAIL: VULN refs found" || echo "PASS"
 
-# report.md length
-wc -l {audit_dir}/reports/<short_name>/report.md
-# Must be >= 50 lines
-
-# Required sections in report.md
-grep -l "## Summary" {audit_dir}/reports/<short_name>/report.md
-grep -l "## Details" {audit_dir}/reports/<short_name>/report.md
-grep -l "Reproduction Steps" {audit_dir}/reports/<short_name>/report.md
-grep -l "## Severity" {audit_dir}/reports/<short_name>/report.md
+# Required content in report.md
+grep -l "## Impact" {audit_dir}/reports/<short_name>/report.md
+grep -l "## Root Cause" {audit_dir}/reports/<short_name>/report.md
+grep -l "## Fix" {audit_dir}/reports/<short_name>/report.md
 grep -l "CVSS:3.1" {audit_dir}/reports/<short_name>/report.md
-grep -l "## Recommended Fix" {audit_dir}/reports/<short_name>/report.md
+grep -l "CWE-" {audit_dir}/reports/<short_name>/report.md
+
+# Filler-phrase scan (should return nothing)
+grep -iE "it is important to note|in conclusion|this vulnerability is significant|devastating impact" \
+  {audit_dir}/reports/<short_name>/report.md && echo "FAIL: filler phrasing" || echo "PASS"
 
 # setup.sh contains docker compose
 grep "docker compose" {audit_dir}/reports/<short_name>/setup.sh || echo "FAIL: no docker compose"
@@ -273,10 +259,13 @@ echo "<short_name>" | grep -E '^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$' && echo "PASS"
 
 If any check fails, fix the output file before finishing.
 
-## Writing Guidelines
+## Writing Style
 
-- **No VULN-NNN anywhere** — this is the primary rule. The report must make sense to a reader who has never seen the audit workspace.
-- **Exact code references** — use `file:line` format for all code citations in report.md
-- **Verified output only** — paste the actual `execution-output.txt` content, not approximations
-- **Complete reproduction steps** — a reader with no prior context must be able to follow setup.sh + poc.py to reproduce the finding
-- **Self-contained PoC** — poc.py must run with only pip dependencies, no local file imports or hardcoded paths from the audit workspace
+- **Lead with the bug.** First line of every section is the technical fact, not a setup sentence.
+- **One sentence per claim.** If a section is more than three short sentences plus a code block, you are over-explaining.
+- **Active voice, present tense.** "The function reads N bytes without checking the buffer size" — not "A vulnerability was identified where the buffer size was not being checked".
+- **Code over prose.** A diff or annotated snippet beats two paragraphs of explanation.
+- **No marketing language.** No "critical", "devastating", "severe security implications" outside the Severity field. The CVSS score conveys severity.
+- **Exact code references** — `file:line` format for every code citation.
+- **Verified output only** — paste actual `execution-output.txt`, not approximations.
+- **Self-contained PoC** — `poc.py` runs with only pip dependencies, no local imports or audit-workspace paths.
