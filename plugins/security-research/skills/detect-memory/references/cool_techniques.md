@@ -1,2 +1,12 @@
 # Cool Techniques — Memory Safety Detection
 <!-- Techniques are added by /security-research:capture-technique -->
+
+### Iteration-Boundary Trace on Recent Bound-Check Fixes (learned 2026-05-02)
+**When to apply**: Any C/C++ codebase where a recent commit added a `(idx) < sizeof(buf)` or similar bound check to a previously-unbounded loop. Especially when the loop body dereferences before the check evaluates, or when post-loop code uses `idx+1` for the next operation.
+**Technique**: Don't accept "bound check exists" as proof of safety. Trace the iteration where the check *just barely passes* (idx == max-1). Compute what the next access reads/writes. Then check the post-loop computation — `idx`, `idx+1`, `q-p`, `q-p+1` are all common off-by-one fault lines. C's `&&` is left-to-right: a dereference left of the size check fires before the check. Verify what gets dereferenced, what `count` is passed to the post-loop `memcpy`/`CopyString`, and whether the destination is sized for `count` or `count-1`.
+**Example**: Off-by-one in `while ((*q != sentinel) && ((q-p) < sizeof(buf))) q++; CopyString(dst, p, q-p+1)`. When q-p reaches sizeof(buf)-1, all conditions pass, q++. Next iteration's `*q` is read (OOB read of 1 byte); only then does the size check fail. Then `CopyString(dst, p, sizeof(buf)+1)` writes 1 byte past dst (OOB write).
+
+### 32-Bit `size_t` Overflow on Multi-Factor Dimension Arithmetic (learned 2026-05-02)
+**When to apply**: Any C codebase parsing attacker-controlled width × channels × depth (or similar 3+ factor) arithmetic to size a buffer, where the audit and fuzz harness are 64-bit but the project ships on 32-bit too (embedded, Win32, `-m32`, mobile).
+**Technique**: Don't dismiss with "depth is u8 ≤ 255 so it's bounded." That bound is irrelevant if `size_t` is 32-bit and any one factor is 32-bit. Enumerate every multiplication of 3+ attacker-influenced fields; compute `SIZE_MAX / (other-factors)` on 32-bit; if the remaining factor's max attacker reach exceeds that, the multiplication wraps to a small value, alloc returns small, the subsequent fixed-size copy/read writes far past the buffer. Defensive `HeapOverflowSanityCheck(a, b)` calls are often added precisely for this 32-bit path while the 64-bit path is naturally bounded.
+**Example**: `image->columns * channels * image->depth` for image-parser row-size on 32-bit `size_t`. `pixels_per_line` u32 max 4×10⁹, depth max 255, channels=3. Product on 64-bit: ~3×10¹², well below 2⁶⁴. Product on 32-bit: wraps when columns > 2³² / (3×255) ≈ 5.6M. Heap-overflow on 32-bit only.
